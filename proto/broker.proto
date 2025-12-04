@@ -1,0 +1,45 @@
+syntax = "proto3";
+package broker;
+
+service Broker {
+  rpc GetJobs(GetJobsRequest) returns (stream JobSpec);
+  rpc RecordExecution(stream JobExecution) returns (Empty);
+}
+
+message GetJobsRequest {
+  string region = 1;
+}
+
+message JobSpec {
+  string job_id = 1;
+  int64 lock_nonce = 2;
+  int64 scheduled_at = 3;
+  string method = 4;
+  string url = 5;
+  map<string, string> headers = 6;
+  string body = 7;
+  int32 timeout_ms = 8;
+}
+
+message JobExecution {
+  string job_id = 1;
+  bool success = 2;
+  int64 lock_nonce = 3;
+  Response response = 4;
+  optional string response_error = 5;
+}
+
+message Request {
+  string method = 1;
+  string url = 2;
+  map<string,string> headers = 3;
+  string body = 4;
+}
+
+message Response {
+  int64 status = 1;
+  map<string, string> headers = 2;
+  string body = 3;
+}
+
+message Empty {}

@@ -6,6 +6,7 @@ use sqlx::postgres::PgPoolOptions;
 use tokio::select;
 
 mod api;
+mod broker;
 mod executor;
 mod pg;
 mod scheduler;
@@ -31,6 +32,8 @@ pub enum Commands {
     Dev(DevOptions),
     /// Runs only the executor service
     Executor(ExecutorOptions),
+    /// Runs only the broker service
+    Broker(BrokerOptions),
     /// Runs only the scheduler service
     Scheduler(SchedulerOptions),
     /// Runs only the api service
@@ -43,14 +46,18 @@ pub enum Commands {
 pub struct DevOptions {
     #[arg(long, default_value_t = 3000)]
     api_port: usize,
-    #[arg(long, env = "POSTGRES_URL")]
+    #[arg(long, default_value_t = 30001)]
+    broker_port: usize,
+    #[arg(long, default_value = "local-1")]
+    region: String,
+    #[arg(long, env = "DATABASE_URL")]
     postgres_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Parser)]
 pub struct ExecutorOptions {
-    #[arg(long, env = "POSTGRES_URL")]
-    postgres_url: String,
+    broker_url: String,
+    region: String,
 }
 
 impl TryFrom<DevOptions> for ExecutorOptions {
@@ -58,6 +65,24 @@ impl TryFrom<DevOptions> for ExecutorOptions {
 
     fn try_from(value: DevOptions) -> Result<Self, Self::Error> {
         Ok(Self {
+            broker_url: format!("http://[::1]:{}", value.broker_port),
+            region: value.region,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Parser)]
+pub struct BrokerOptions {
+    port: usize,
+    postgres_url: String,
+}
+
+impl TryFrom<DevOptions> for BrokerOptions {
+    type Error = anyhow::Error;
+
+    fn try_from(value: DevOptions) -> Result<Self, Self::Error> {
+        Ok(Self {
+            port: value.broker_port,
             postgres_url: value
                 .postgres_url
                 .ok_or(anyhow!("No postgres url provided!"))?,
@@ -67,7 +92,7 @@ impl TryFrom<DevOptions> for ExecutorOptions {
 
 #[derive(Debug, Clone, Parser)]
 pub struct SchedulerOptions {
-    #[arg(long, env = "POSTGRES_URL")]
+    #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
 }
 
@@ -87,7 +112,7 @@ impl TryFrom<DevOptions> for SchedulerOptions {
 pub struct ApiOptions {
     #[arg(long, env = "PORT", default_value_t = 3000)]
     port: usize,
-    #[arg(long, env = "POSTGRES_URL")]
+    #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
 }
 
@@ -106,7 +131,7 @@ impl TryFrom<DevOptions> for ApiOptions {
 
 #[derive(Debug, Clone, Parser)]
 pub struct MigrationOptions {
-    #[arg(long, env = "POSTGRES_URL")]
+    #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
 }
 
@@ -155,15 +180,29 @@ async fn main() -> anyhow::Result<()> {
 
             let api_config =
                 api::Config::from_cli(dev_options.clone().try_into()?, pool.clone()).await;
-            let executor_config =
-                executor::Config::from_cli(dev_options.clone().try_into()?, pool.clone()).await;
+            let broker_config =
+                broker::Config::from_cli(dev_options.clone().try_into()?, pool.clone()).await;
+            let executor_config = executor::Config::from_cli(dev_options.clone().try_into()?).await;
             let scheduler_config =
                 scheduler::Config::from_cli(dev_options.clone().try_into()?, pool.clone()).await;
 
             select! {
-              _ = api::start(api_config) => println!("Api Service Stopped."),
-              _ = executor::start(executor_config) => println!("Executor Service Stopped."),
-              _ = scheduler::start(scheduler_config) => println!("Scheduler Service Stopped."),
+              api_res = api::start(api_config) => {
+                println!("Api Service Stopped.");
+                api_res?;
+              },
+              broker_res = broker::start(broker_config) => {
+                println!("Broker Service Stopped.");
+                broker_res?;
+              },
+              executor_res = executor::start(executor_config) => {
+                println!("Executor Service Stopped.");
+                executor_res?;
+              },
+              scheduler_res = scheduler::start(scheduler_config) => {
+                println!("Scheduler Service Stopped.");
+                scheduler_res?;
+              },
               _ = tokio::signal::ctrl_c() => println!("Received Ctrl-C.")
             }
         }
@@ -173,9 +212,14 @@ async fn main() -> anyhow::Result<()> {
             api::start(config).await?;
             println!("Api Service Stopped.");
         }
+        Some(Commands::Broker(broker_config)) => {
+            let pool = pg::create_pool(broker_config.postgres_url.clone()).await?;
+            let config = broker::Config::from_cli(broker_config, pool).await;
+            broker::start(config).await?;
+            println!("Broker Service Stopped.")
+        }
         Some(Commands::Executor(executor_config)) => {
-            let pool = pg::create_pool(executor_config.postgres_url.clone()).await?;
-            let config = executor::Config::from_cli(executor_config, pool).await;
+            let config = executor::Config::from_cli(executor_config).await;
             executor::start(config).await?;
             println!("Executor Service Stopped.");
         }

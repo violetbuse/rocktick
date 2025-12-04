@@ -8,6 +8,7 @@ anyhow = "1.0.100"
 clap = { version = "4.5.53", features = ["cargo", "derive", "env", "string"] }
 dotenvy = "0.15.7"
 futures = "0.3.31"
+maplit = "1.0.2"
 poem = "3.1.12"
 postgresql_embedded = "0.20.0"
 prost = "0.14.1"
