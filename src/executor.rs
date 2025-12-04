@@ -6,11 +6,7 @@ use std::{
 };
 
 use replace_err::ReplaceErr;
-use reqwest::{
-    Client,
-    header::{self, HeaderMap},
-};
-use rustls::ClientConfig;
+use reqwest::Client;
 use tokio::{
     net::lookup_host,
     select,
@@ -18,7 +14,6 @@ use tokio::{
 };
 use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tonic::Request;
-use webpki_roots::TLS_SERVER_ROOTS;
 
 use crate::{
     ExecutorOptions,

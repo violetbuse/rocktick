@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use nanoid::nanoid;
 use sqlx::{Pool, Postgres};
 use tokio::select;
 use tokio::sync::mpsc;
@@ -59,6 +60,7 @@ impl BrokerTrait for Broker {
                   )
                 ORDER BY scheduled_at
                 LIMIT $2
+                FOR UPDATE SKIP LOCKED
               )
               UPDATE scheduled_jobs j
               SET lock_nonce = extract(epoch from now())
@@ -120,10 +122,104 @@ impl BrokerTrait for Broker {
         &self,
         req: tonic::Request<tonic::Streaming<JobExecution>>,
     ) -> Result<tonic::Response<Empty>, Status> {
-        let mut jobs = req.into_inner();
-        while let Some(job_execution) = jobs.next().await {
-            dbg!(job_execution)?;
-        }
+        let mut executions = req.into_inner();
+        let pool = self.pool.clone();
+
+        tokio::spawn(async move {
+            while let Some(job_execution) = executions.next().await {
+                if let Ok(execution) = job_execution {
+                    let pool = pool.clone();
+                    tokio::spawn(async move {
+                        let id = execution.job_id.clone();
+                        let success: anyhow::Result<()> = async {
+                            let mut tx = pool.begin().await?;
+
+                            let scheduled = sqlx::query!(
+                                r#"
+                            SELECT id, lock_nonce
+                            FROM scheduled_jobs
+                            WHERE id = $1
+                              AND lock_nonce = $2
+                            FOR UPDATE;
+                            "#,
+                                execution.job_id,
+                                execution.lock_nonce as i32
+                            )
+                            .fetch_one(&mut *tx)
+                            .await?;
+
+                            let mut response_id = None;
+
+                            if let Some(response) = execution.response {
+                                let res_id = format!("response_{}", nanoid!());
+                                response_id = Some(res_id.clone());
+
+                                let headers: Vec<String> = response
+                                    .headers
+                                    .iter()
+                                    .map(|(k, v)| format!("{k}: {v}"))
+                                    .collect();
+
+                                sqlx::query!(
+                                    r#"
+                                    INSERT INTO http_responses
+                                      (id, status, headers, body)
+                                    VALUES
+                                      ($1, $2, $3, $4);
+                                    "#,
+                                    res_id,
+                                    response.status as i64,
+                                    &headers,
+                                    response.body
+                                )
+                                .execute(&mut *tx)
+                                .await?;
+                            }
+
+                            let execution_id = format!("execution_{}", nanoid!());
+
+                            sqlx::query!(
+                                r#"
+                                INSERT INTO job_executions
+                                  (id, executed_at, success, response_id, response_error)
+                                VALUES
+                                  ($1, now(), $2, $3, $4);
+                              "#,
+                                execution_id.clone(),
+                                execution.success,
+                                response_id,
+                                execution.response_error
+                            )
+                            .execute(&mut *tx)
+                            .await?;
+
+                            sqlx::query!(
+                                r#"
+                                UPDATE scheduled_jobs
+                                SET execution_id = $2
+                                WHERE id = $1;
+                              "#,
+                                scheduled.id,
+                                execution_id
+                            )
+                            .execute(&mut *tx)
+                            .await?;
+
+                            tx.commit().await?;
+
+                            Ok(())
+                        }
+                        .await;
+
+                        if let Err(error) = success {
+                            eprintln!(
+                                "Error committing execution to the database for job id {id}: {error:?}"
+                            );
+                        }
+                    });
+                }
+            }
+        });
 
         Ok(tonic::Response::new(Empty {}))
     }
@@ -135,11 +231,18 @@ async fn run_cleanup(pool: Pool<Postgres>) -> anyhow::Result<()> {
         println!("Running broker cleanup");
         sqlx::query!(
             r#"
-          UPDATE scheduled_jobs
-          SET lock_nonce = NULL
-          WHERE lock_nonce IS NOT NULL
-            AND to_timestamp(lock_nonce) + (timeout_ms / 1000 || ' seconds')::interval
-                < now() - interval '30 seconds';
+              WITH cleanup_candidates AS (
+                SELECT id
+                FROM scheduled_jobs
+                WHERE lock_nonce IS NOT NULL
+                  AND to_timestamp(lock_nonce) + (timeout_ms / 1000 || ' seconds')::interval
+                      < now() - interval '30 seconds'
+                FOR UPDATE SKIP LOCKED
+              )
+              UPDATE scheduled_jobs
+              SET lock_nonce = NULL
+              FROM cleanup_candidates
+              WHERE scheduled_jobs.id = cleanup_candidates.id;
           "#
         )
         .execute(&pool)

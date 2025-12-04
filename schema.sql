@@ -11,11 +11,12 @@ CREATE TABLE http_responses (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
   status INTEGER NOT NULL,
   headers TEXT[] NOT NULL,
-  body TEXT
+  body TEXT NOT NULL
 );
 
 CREATE TABLE job_executions (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
+  executed_at TIMESTAMP NOT NULL,
   success BOOLEAN,
   response_id VARCHAR(255) UNIQUE REFERENCES http_responses(id),
   response_error TEXT
