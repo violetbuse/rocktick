@@ -14,21 +14,22 @@ CREATE TABLE http_responses (
   body TEXT
 );
 
+CREATE TABLE job_executions (
+  id VARCHAR(255) NOT NULL PRIMARY KEY,
+  success BOOLEAN,
+  response_id VARCHAR(255) UNIQUE REFERENCES http_responses(id),
+  response_error TEXT
+);
+
 CREATE TABLE scheduled_jobs (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
   hash INTEGER NOT NULL,
   lock_nonce INTEGER,
   region TEXT NOT NULL,
   scheduled_at TIMESTAMP NOT NULL,
-  request VARCHAR(255) NOT NULL REFERENCES http_requests(id),
+  request_id VARCHAR(255) NOT NULL UNIQUE REFERENCES http_requests(id),
+  execution_id VARCHAR(255) UNIQUE REFERENCES job_executions(id),
   timeout_ms INTEGER NOT NULL,
-  max_retries INTEGER NOT NULL
-);
-
-CREATE TABLE job_executions (
-  id VARCHAR(255) NOT NULL PRIMARY KEY,
-  job_id VARCHAR(255) NOT NULL REFERENCES scheduled_jobs(id),
-  success BOOLEAN,
-  response VARCHAR(255) REFERENCES http_responses(id),
-  response_error TEXT
+  max_retries INTEGER NOT NULL,
+  max_response_bytes INTEGER NOT NULL
 );

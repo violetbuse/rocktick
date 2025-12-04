@@ -17,8 +17,9 @@ message JobSpec {
   string method = 4;
   string url = 5;
   map<string, string> headers = 6;
-  string body = 7;
+  optional string body = 7;
   int32 timeout_ms = 8;
+  int64 max_response_bytes = 9;
 }
 
 message JobExecution {
@@ -27,13 +28,6 @@ message JobExecution {
   int64 lock_nonce = 3;
   Response response = 4;
   optional string response_error = 5;
-}
-
-message Request {
-  string method = 1;
-  string url = 2;
-  map<string,string> headers = 3;
-  string body = 4;
 }
 
 message Response {
