@@ -1,7 +1,13 @@
+mod cron;
+mod one_off;
+mod public;
+mod tenant;
+
 use poem::{Route, Server, handler, listener::TcpListener, web::Path};
+use poem_openapi::OpenApiService;
 use sqlx::{Pool, Postgres};
 
-use crate::ApiOptions;
+use crate::{ApiOptions, api::public::PublicApi};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -29,7 +35,17 @@ impl Config {
 pub async fn start(config: Config) -> anyhow::Result<()> {
     println!("Valid Regions: {:?}", &config.valid_regions);
 
-    let app = Route::new().at("/hello/:name", poem::get(hello));
+    let public_api = OpenApiService::new(
+        PublicApi { pool: config.pool },
+        "Rocktick Api",
+        "http://localhost:3000",
+    );
+    let ui = public_api.scalar();
+
+    let app = Route::new().nest("/", public_api).nest("/docs", ui);
+
+    println!("Api   http://localhost:{}/api", config.port);
+    println!("Docs  http://localhost:{}/docs", config.port);
 
     Server::new(TcpListener::bind(format!("0.0.0.0:{}", config.port)))
         .run(app)

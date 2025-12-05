@@ -34,7 +34,8 @@ async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> any
           job.max_response_bytes as max_response_bytes,
           job.created_at as created_at,
           job.start_at as start_at,
-          job.request_id as request_id
+          job.request_id as request_id,
+          job.tenant_id as tenant_id
         FROM
           cron_jobs as job
         LEFT JOIN
@@ -129,6 +130,7 @@ async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> any
             hash,
             region,
             cron_job_id,
+            tenant_id,
             scheduled_at,
             request_id,
             timeout_ms,
@@ -145,18 +147,20 @@ async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> any
             $6,
             $7,
             $8,
-            $9
+            $9,
+            $10
           );
         "#,
             new_job_id,
             hash,
             cron_job.region,
             Some(cron_job.id.clone()),
+            cron_job.tenant_id,
             scheduled_time,
             cron_job.request_id,
             cron_job.timeout_ms,
             cron_job.max_retries,
-            cron_job.max_response_bytes
+            cron_job.max_response_bytes,
         )
         .execute(&mut *tx)
         .await?;

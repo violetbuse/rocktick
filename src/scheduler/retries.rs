@@ -20,6 +20,7 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
       job.max_retries as max_retries,
       job.max_response_bytes as max_response_bytes,
       job.request_id as request_id,
+      job.tenant_id as tenant_id,
       exec.executed_at as executed_at
     FROM scheduled_jobs as job
     INNER JOIN job_executions as exec ON job.execution_id = exec.id
@@ -52,38 +53,31 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
         SELECT
           id,
           retry_for_id,
-          0 AS attempts_made,
-          id AS job_to_trace
+          0 AS attempts_made
         FROM
           scheduled_jobs
+        WHERE id = $1
 
         UNION ALL
 
         SELECT
           s.id,
           s.retry_for_id,
-          r.attempts_made + 1,
-          r.job_to_trace
+          r.attempts_made + 1
         FROM
           scheduled_jobs s
         JOIN
           retry_chain r ON s.retry_for_id = r.id
       )
-      SELECT
-        j.id,
-        j.max_retries,
-        COALESCE(MAX(r.attempts_made), 0) AS retries_already_attempted
-      FROM scheduled_jobs j
-      JOIN retry_chain r ON j.id = r.job_to_trace
-      WHERE j.id = $1
-      GROUP BY j.id, j.max_retries
-    "#,
+      SELECT COALESCE(MAX(attempts_made), 0) as attempts
+      FROM retry_chain;
+      "#,
         to_retry.id
     )
     .fetch_one(&mut *tx)
     .await?;
 
-    let attempts_made = retry_query.retries_already_attempted.unwrap();
+    let attempts_made = retry_query.attempts.unwrap();
     let attempts_remaining = to_retry.max_retries - 1;
 
     let base_delay_ms = 60 * 1000;
@@ -108,6 +102,7 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
           one_off_job_id,
           cron_job_id,
           retry_for_id,
+          tenant_id,
           scheduled_at,
           request_id,
           timeout_ms,
@@ -126,7 +121,8 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
           $8,
           $9,
           $10,
-          $11
+          $11,
+          $12
         );
       "#,
         new_job_id,
@@ -135,6 +131,7 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
         to_retry.one_off_job_id,
         to_retry.cron_job_id,
         Some(to_retry.id),
+        to_retry.tenant_id,
         next_time,
         to_retry.request_id,
         to_retry.timeout_ms,

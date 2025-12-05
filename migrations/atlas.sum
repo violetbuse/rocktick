@@ -1,4 +1,4 @@
-h1:sr5IoX7pBGKOmpsR0xH1C0BgYouKDmb54FR9nelJgM0=
+h1:igfAUPVAZJ2CmRroaC24qAKVGHjB/mTURUpIpQjORQI=
 20251203210042_initialized_project.sql h1:JphUmqibBPSs2wG6eWQFyijH8UzApjfiUnyUxAq1WuM=
 20251204091639_add_url_to_request.sql h1:wDFdyCr7r9hqY5BlH+yu07/iFFVKpmueT1gybTzSnSI=
 20251204091857_add_scheduled_stuff.sql h1:Ykvy8wTbx7hQmdn00SC/XiAllJfsTxEX1XceqrOMKLc=
@@ -22,3 +22,4 @@ h1:sr5IoX7pBGKOmpsR0xH1C0BgYouKDmb54FR9nelJgM0=
 20251205110553_make_req_id_not_unique_for_sched_jobs.sql h1:H3V4LgCMfMDVIKpA1X8aJ1pl9GYg2scIMJgXTdUpF/k=
 20251205181906_add_tenants.sql h1:RSWPrxiG8B4P96aXB0rK0FfMND/9nK3JqCXjULz2ouU=
 20251205183021_add_max_tokens_tenants.sql h1:w6/lIYtN4t6F9tJxofohZi6hLAKltWAq3xlSrQhT3YA=
+20251205193528_made_retry_for_id_unique.sql h1:xYD8YsT7/wpgNwb0PWrwPTf1RhltMLJ7LXeoPwAMpcc=

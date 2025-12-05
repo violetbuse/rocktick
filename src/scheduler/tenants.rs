@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use chrono::TimeDelta;
+use chrono::{TimeDelta, Utc};
 use sqlx::{Pool, Postgres};
 
 async fn schedule_tenant_token_increase(
@@ -13,7 +13,9 @@ async fn schedule_tenant_token_increase(
         r#"
       SELECT *
       FROM tenants
-      WHERE next_increment < now()
+      WHERE
+        next_increment < now() AND
+        tokens < max_tokens
       LIMIT 1 FOR UPDATE SKIP LOCKED;
       "#
     )
@@ -29,9 +31,13 @@ async fn schedule_tenant_token_increase(
 
     let new_tokens = (tenant.tokens + tenant.increment).min(tenant.max_tokens);
     let period = tenant.period;
-    let next_time = tenant.next_increment
-        + TimeDelta::hours(24 * period.days as i64)
-        + TimeDelta::microseconds(period.microseconds);
+    let next_time = if new_tokens == tenant.max_tokens {
+        Utc::now() + TimeDelta::minutes(1)
+    } else {
+        tenant.next_increment
+            + TimeDelta::hours(24 * period.days as i64)
+            + TimeDelta::microseconds(period.microseconds)
+    };
 
     sqlx::query!(
         r#"

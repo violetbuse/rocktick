@@ -68,7 +68,7 @@ CREATE TABLE scheduled_jobs (
   cron_job_id VARCHAR(255) REFERENCES cron_jobs(id),
   -- Workflows to be implemented later
   workflow_id VARCHAR(255),
-  retry_for_id VARCHAR(255) REFERENCES scheduled_jobs(id),
+  retry_for_id VARCHAR(255) UNIQUE REFERENCES scheduled_jobs(id),
   scheduled_at TIMESTAMPTZ NOT NULL,
   request_id VARCHAR(255) NOT NULL REFERENCES http_requests(id),
   execution_id VARCHAR(255) UNIQUE REFERENCES job_executions(id),

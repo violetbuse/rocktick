@@ -19,7 +19,8 @@ async fn schedule_one_off_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> 
       job.timeout_ms as timeout_ms,
       job.max_retries as max_retries,
       job.max_response_bytes as max_response_bytes,
-      job.request_id as request_id
+      job.request_id as request_id,
+      job.tenant_id as tenant_id
     FROM one_off_jobs as job
     LEFT JOIN
       scheduled_jobs as scheduled
@@ -58,6 +59,7 @@ async fn schedule_one_off_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> 
           hash,
           region,
           one_off_job_id,
+          tenant_id,
           scheduled_at,
           request_id,
           timeout_ms,
@@ -74,13 +76,15 @@ async fn schedule_one_off_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> 
           $6,
           $7,
           $8,
-          $9
+          $9,
+          $10
         );
       "#,
         new_job_id,
         hash,
         to_schedule.region,
         Some(to_schedule.id),
+        to_schedule.tenant_id,
         scheduled_time,
         to_schedule.request_id,
         to_schedule.timeout_ms,
