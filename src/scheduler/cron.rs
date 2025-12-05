@@ -1,5 +1,12 @@
-use std::time::Duration;
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    str::FromStr,
+    time::Duration,
+};
 
+use chrono::TimeDelta;
+use cron::Schedule;
+use nanoid::nanoid;
 use sqlx::{Pool, Postgres};
 
 async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> anyhow::Result<()> {
@@ -25,18 +32,17 @@ async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> any
           job.timeout_ms as timeout_ms,
           job.max_retries as max_retries,
           job.max_response_bytes as max_response_bytes,
-          req.method as method,
-          req.url as url,
-          req.headers as headers,
-          req.body as body
+          job.created_at as created_at,
+          job.start_at as start_at,
+          job.request_id as request_id
         FROM
           cron_jobs as job
-        INNER JOIN http_requests as req ON job.request_id = req.id
         JOIN
           unexecuted_job_counts as counts
           ON job.id = counts.cron_id
         WHERE
-          counts.unexecuted_count < 60
+          counts.unexecuted_count < 60 AND
+          job.error IS NULL
         LIMIT 1 FOR UPDATE OF job SKIP LOCKED;
         "#
     )
@@ -61,7 +67,95 @@ async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> any
     .fetch_optional(&mut *tx)
     .await?;
 
-    todo!("Actually schedule the cron job.");
+    let schedule = Schedule::from_str(&cron_job.schedule);
+
+    if let Err(err) = schedule {
+        sqlx::query!(
+            r#"
+        UPDATE cron_jobs
+        SET error = $2
+        WHERE id = $1;
+        "#,
+            cron_job.id,
+            format!(
+                "{} is not a valid cron expression: {:?}",
+                cron_job.schedule, err
+            )
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        return Ok(());
+    }
+
+    let start_time = latest_scheduled
+        .map(|r| r.scheduled_at)
+        .unwrap_or(cron_job.created_at)
+        .max(cron_job.start_at);
+
+    let schedule = schedule.unwrap();
+    let mut count = 0;
+    let mut times = Vec::new();
+    for datetime in schedule.after(&start_time).take(100) {
+        count += 1;
+        times.push(datetime);
+
+        let since_start = datetime - start_time;
+        if since_start > TimeDelta::seconds(90) && count > 10 {
+            break;
+        }
+    }
+
+    for scheduled_time in times {
+        let new_job_id = format!("scheduled_{}", nanoid!());
+
+        let mut hasher = DefaultHasher::new();
+        new_job_id.hash(&mut hasher);
+        let full_hash: u64 = hasher.finish();
+        let truncated_hash_u32 = (full_hash & 0xFFFFFFFF) as u32;
+        let hash = truncated_hash_u32 as i32;
+
+        sqlx::query!(
+            r#"
+        INSERT INTO scheduled_jobs
+          (
+            id,
+            hash,
+            region,
+            cron_job_id,
+            scheduled_at,
+            request_id,
+            timeout_ms,
+            max_retries,
+            max_response_bytes
+          )
+        VALUES
+          (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9
+          );
+        "#,
+            new_job_id,
+            hash,
+            cron_job.region,
+            Some(cron_job.id.clone()),
+            scheduled_time,
+            cron_job.request_id,
+            cron_job.timeout_ms,
+            cron_job.max_retries,
+            cron_job.max_response_bytes
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
 
     tx.commit().await?;
 

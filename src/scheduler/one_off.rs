@@ -3,6 +3,7 @@ use std::{
     time::Duration,
 };
 
+use chrono::DateTime;
 use nanoid::nanoid;
 use sqlx::{Pool, Postgres};
 
@@ -18,12 +19,8 @@ async fn schedule_one_off_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> 
       job.timeout_ms as timeout_ms,
       job.max_retries as max_retries,
       job.max_response_bytes as max_response_bytes,
-      req.method as method,
-      req.url as url,
-      req.headers as headers,
-      req.body as body
+      job.request_id as request_id
     FROM one_off_jobs as job
-    INNER JOIN http_requests as req ON job.request_id = req.id
     LEFT JOIN
       scheduled_jobs as scheduled
       ON job.id = scheduled.one_off_job_id
@@ -41,21 +38,7 @@ async fn schedule_one_off_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> 
 
     let to_schedule = job_to_schedule.unwrap();
 
-    let new_request_id = format!("request_{}", nanoid!());
-
-    sqlx::query!(
-        r#"
-      INSERT INTO http_requests (id, method, url, headers, body)
-      VALUES ($1, $2, $3, $4, $5)
-      "#,
-        new_request_id,
-        to_schedule.method,
-        to_schedule.url,
-        &to_schedule.headers,
-        to_schedule.body
-    )
-    .execute(&mut *tx)
-    .await?;
+    let scheduled_time = DateTime::from_timestamp_secs(to_schedule.execute_at);
 
     let new_job_id = format!("scheduled_{}", nanoid!());
 
@@ -85,7 +68,7 @@ async fn schedule_one_off_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> 
           $2,
           $3,
           $4,
-          TO_TIMESTAMP($5),
+          $5,
           $6,
           $7,
           $8,
@@ -96,8 +79,8 @@ async fn schedule_one_off_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> 
         hash,
         to_schedule.region,
         Some(to_schedule.id),
-        to_schedule.execute_at as i64,
-        new_request_id,
+        scheduled_time,
+        to_schedule.request_id,
         to_schedule.timeout_ms,
         to_schedule.max_retries,
         to_schedule.max_response_bytes

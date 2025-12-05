@@ -149,9 +149,9 @@ async fn run_job(job: JobSpec, state: ExecutorState) {
             send_request_to_ip(
                 &job.url,
                 addr,
-                job.method,
-                job.headers,
-                job.body,
+                job.method.clone(),
+                job.headers.clone(),
+                job.body.clone(),
                 job.timeout_ms as u64,
             )
             .await
@@ -203,6 +203,10 @@ async fn run_job(job: JobSpec, state: ExecutorState) {
                     body: text,
                 }),
                 response_error: None,
+                req_method: job.method,
+                req_url: job.url,
+                req_headers: job.headers,
+                req_body: job.body,
             }
         }
         Err(error) => JobExecution {
@@ -211,6 +215,10 @@ async fn run_job(job: JobSpec, state: ExecutorState) {
             lock_nonce: job.lock_nonce,
             response: None,
             response_error: Some(error),
+            req_method: job.method,
+            req_url: job.url,
+            req_headers: job.headers,
+            req_body: job.body,
         },
     };
 

@@ -28,6 +28,10 @@ message JobExecution {
   int64 lock_nonce = 3;
   Response response = 4;
   optional string response_error = 5;
+  string req_method = 6;
+  string req_url = 7;
+  map<string, string> req_headers = 8;
+  optional string req_body = 9;
 }
 
 message Response {

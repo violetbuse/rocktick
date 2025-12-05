@@ -19,14 +19,10 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
       job.timeout_ms as timeout_ms,
       job.max_retries as max_retries,
       job.max_response_bytes as max_response_bytes,
-      exec.executed_at as executed_at,
-      req.method as method,
-      req.url as url,
-      req.headers as headers,
-      req.body as body
+      job.request_id as request_id,
+      exec.executed_at as executed_at
     FROM scheduled_jobs as job
     INNER JOIN job_executions as exec ON job.execution_id = exec.id
-    INNER JOIN http_requests as req ON job.request_id = req.id
     LEFT JOIN
       scheduled_jobs as pending_retry
       ON job.id = pending_retry.retry_for_id
@@ -92,22 +88,6 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
     let wait_time = base_delay_ms * (2 ^ attempts_made as u64);
     let next_time = to_retry.executed_at + Duration::from_millis(wait_time);
 
-    let new_request_id = format!("request_{}", nanoid!());
-
-    sqlx::query!(
-        r#"
-      INSERT INTO http_requests (id, method, url, headers, body)
-      VALUES ($1, $2, $3, $4, $5)
-      "#,
-        new_request_id,
-        to_retry.method,
-        to_retry.url,
-        &to_retry.headers,
-        to_retry.body
-    )
-    .execute(&mut *tx)
-    .await?;
-
     let new_job_id = format!("scheduled_{}", nanoid!());
 
     let mut hasher = DefaultHasher::new();
@@ -154,7 +134,7 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
         to_retry.cron_job_id,
         Some(to_retry.id),
         next_time,
-        new_request_id,
+        to_retry.request_id,
         to_retry.timeout_ms,
         attempts_remaining,
         to_retry.max_response_bytes

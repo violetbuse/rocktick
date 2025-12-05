@@ -21,7 +21,8 @@ CREATE TABLE one_off_jobs (
   execute_at BIGINT NOT NULL,
   timeout_ms INTEGER NOT NULL,
   max_retries INTEGER NOT NULL,
-  max_response_bytes INTEGER NOT NULL
+  max_response_bytes INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE cron_jobs (
@@ -31,13 +32,17 @@ CREATE TABLE cron_jobs (
   schedule TEXT NOT NULL,
   timeout_ms INTEGER NOT NULL,
   max_retries INTEGER NOT NULL,
-  max_response_bytes INTEGER NOT NULL
+  max_response_bytes INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  start_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  error TEXT
 );
 
 CREATE TABLE job_executions (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
-  executed_at TIMESTAMP NOT NULL,
+  executed_at TIMESTAMPTZ NOT NULL,
   success BOOLEAN,
+  request_id VARCHAR(255) NOT NULL UNIQUE REFERENCES http_requests(id),
   response_id VARCHAR(255) UNIQUE REFERENCES http_responses(id),
   response_error TEXT
 );
@@ -52,8 +57,8 @@ CREATE TABLE scheduled_jobs (
   -- Workflows to be implemented later
   workflow_id VARCHAR(255),
   retry_for_id VARCHAR(255) REFERENCES scheduled_jobs(id),
-  scheduled_at TIMESTAMP NOT NULL,
-  request_id VARCHAR(255) NOT NULL UNIQUE REFERENCES http_requests(id),
+  scheduled_at TIMESTAMPTZ NOT NULL,
+  request_id VARCHAR(255) NOT NULL REFERENCES http_requests(id),
   execution_id VARCHAR(255) UNIQUE REFERENCES job_executions(id),
   timeout_ms INTEGER NOT NULL,
   max_retries INTEGER NOT NULL,

@@ -88,7 +88,7 @@ impl BrokerTrait for Broker {
                     let job_spec = JobSpec {
                         job_id: job.job_id,
                         lock_nonce: job.lock_nonce.unwrap() as i64,
-                        scheduled_at: job.scheduled_at.as_utc().unix_timestamp(),
+                        scheduled_at: job.scheduled_at.timestamp(),
                         method: job.method,
                         url: job.url,
                         headers: job
@@ -148,6 +148,29 @@ impl BrokerTrait for Broker {
                             .fetch_one(&mut *tx)
                             .await?;
 
+                            let request_id = format!("request_{}", nanoid!());
+                            let req_headers: Vec<String> = execution
+                                .req_headers
+                                .iter()
+                                .map(|(k, v)| format!("{k}: {v}"))
+                                .collect();
+
+                            sqlx::query!(
+                                r#"
+                              INSERT INTO http_requests
+                                (id, method, url, headers, body)
+                              VALUES
+                                ($1, $2, $3 ,$4, $5)
+                              "#,
+                                request_id,
+                                execution.req_method,
+                                execution.req_url,
+                                &req_headers,
+                                execution.req_body
+                            )
+                            .execute(&mut *tx)
+                            .await?;
+
                             let mut response_id = None;
 
                             if let Some(response) = execution.response {
@@ -181,14 +204,15 @@ impl BrokerTrait for Broker {
                             sqlx::query!(
                                 r#"
                                 INSERT INTO job_executions
-                                  (id, executed_at, success, response_id, response_error)
+                                  (id, executed_at, success, response_id, response_error, request_id)
                                 VALUES
-                                  ($1, now(), $2, $3, $4);
+                                  ($1, now(), $2, $3, $4, $5);
                               "#,
                                 execution_id.clone(),
                                 execution.success,
                                 response_id,
-                                execution.response_error
+                                execution.response_error,
+                                request_id
                             )
                             .execute(&mut *tx)
                             .await?;
