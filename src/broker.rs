@@ -220,7 +220,9 @@ impl BrokerTrait for Broker {
                             sqlx::query!(
                                 r#"
                                 UPDATE scheduled_jobs
-                                SET execution_id = $2
+                                SET
+                                  execution_id = $2,
+                                  lock_nonce = NULL
                                 WHERE id = $1;
                               "#,
                                 scheduled.id,
@@ -252,8 +254,7 @@ impl BrokerTrait for Broker {
 async fn run_cleanup(pool: Pool<Postgres>) -> anyhow::Result<()> {
     loop {
         tokio::time::sleep(Duration::from_secs(15)).await;
-        println!("Running broker cleanup");
-        sqlx::query!(
+        let result = sqlx::query!(
             r#"
               WITH cleanup_candidates AS (
                 SELECT id
@@ -271,6 +272,13 @@ async fn run_cleanup(pool: Pool<Postgres>) -> anyhow::Result<()> {
         )
         .execute(&pool)
         .await?;
+
+        if result.rows_affected() > 0 {
+            println!(
+                "Cleaned up {} jobs which were not executed properly.",
+                result.rows_affected()
+            );
+        }
     }
 }
 

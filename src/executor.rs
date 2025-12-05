@@ -140,6 +140,8 @@ async fn run_job(job: JobSpec, state: ExecutorState) {
 
     tokio::time::sleep(Duration::from_millis(millis_until)).await;
 
+    println!("Executing job {}", job.job_id);
+
     // check if the ip address is unallowed
     let public_addr = resolve_public_ip(&job.url)
         .await

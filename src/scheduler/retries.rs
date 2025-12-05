@@ -44,6 +44,8 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
 
     let to_retry = failed_scheduled_job.unwrap();
 
+    println!("Scheduling retry for {}", to_retry.id);
+
     let retry_query = sqlx::query!(
         r#"
       WITH RECURSIVE retry_chain AS (

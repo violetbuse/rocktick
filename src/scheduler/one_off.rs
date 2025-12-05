@@ -38,6 +38,8 @@ async fn schedule_one_off_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> 
 
     let to_schedule = job_to_schedule.unwrap();
 
+    println!("Scheduling {}", to_schedule.id);
+
     let scheduled_time = DateTime::from_timestamp_secs(to_schedule.execute_at);
 
     let new_job_id = format!("scheduled_{}", nanoid!());

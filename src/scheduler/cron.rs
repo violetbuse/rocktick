@@ -4,8 +4,8 @@ use std::{
     time::Duration,
 };
 
-use chrono::TimeDelta;
-use cron::Schedule;
+use chrono::{TimeDelta, Utc};
+use croner::Cron;
 use nanoid::nanoid;
 use sqlx::{Pool, Postgres};
 
@@ -37,11 +37,11 @@ async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> any
           job.request_id as request_id
         FROM
           cron_jobs as job
-        JOIN
+        LEFT JOIN
           unexecuted_job_counts as counts
           ON job.id = counts.cron_id
         WHERE
-          counts.unexecuted_count < 60 AND
+          COALESCE(counts.unexecuted_count, 0) < 60 AND
           job.error IS NULL
         LIMIT 1 FOR UPDATE OF job SKIP LOCKED;
         "#
@@ -56,6 +56,8 @@ async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> any
 
     let cron_job = cron_job.unwrap();
 
+    println!("Scheduling {}", cron_job.id);
+
     let latest_scheduled = sqlx::query!(
         r#"
     SELECT * FROM scheduled_jobs
@@ -67,7 +69,7 @@ async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> any
     .fetch_optional(&mut *tx)
     .await?;
 
-    let schedule = Schedule::from_str(&cron_job.schedule);
+    let schedule = Cron::from_str(&cron_job.schedule);
 
     if let Err(err) = schedule {
         sqlx::query!(
@@ -91,13 +93,16 @@ async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> any
 
     let start_time = latest_scheduled
         .map(|r| r.scheduled_at)
-        .unwrap_or(cron_job.created_at)
-        .max(cron_job.start_at);
+        .unwrap_or(Utc::now())
+        .max(Utc::now());
 
     let schedule = schedule.unwrap();
     let mut count = 0;
     let mut times = Vec::new();
-    for datetime in schedule.after(&start_time).take(100) {
+    for datetime in schedule
+        .iter_from(start_time, croner::Direction::Forward)
+        .take(100)
+    {
         count += 1;
         times.push(datetime);
 
