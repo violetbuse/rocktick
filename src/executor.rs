@@ -279,7 +279,7 @@ async fn submit_job_results_loop(state: ExecutorState) -> anyhow::Result<()> {
 }
 
 pub async fn start(config: Config) -> anyhow::Result<()> {
-    tokio::time::sleep(Duration::from_secs(rand::random_range(0..10))).await;
+    tokio::time::sleep(Duration::from_secs(rand::random_range(0..4))).await;
 
     let state = ExecutorState {
         exec_results: Arc::new(Mutex::new(Vec::new())),

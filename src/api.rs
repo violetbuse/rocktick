@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use poem::{Route, Server, handler, listener::TcpListener, web::Path};
 use sqlx::{Pool, Postgres};
 

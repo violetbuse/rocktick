@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.100"
 clap = { version = "4.5.53", features = ["cargo", "derive", "env", "string"] }
+cron = "0.15.0"
 dotenvy = "0.15.7"
 futures = "0.3.31"
 hyper-rustls = "0.27.7"
