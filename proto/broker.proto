@@ -26,7 +26,7 @@ message JobExecution {
   string job_id = 1;
   bool success = 2;
   int64 lock_nonce = 3;
-  Response response = 4;
+  optional Response response = 4;
   optional string response_error = 5;
   string req_method = 6;
   string req_url = 7;

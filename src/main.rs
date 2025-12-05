@@ -52,6 +52,8 @@ pub struct DevOptions {
     region: String,
     #[arg(long, env = "DATABASE_URL")]
     postgres_url: Option<String>,
+    #[arg(long, default_value_t = true)]
+    postgres_temporary: bool,
 }
 
 #[derive(Debug, Clone, Parser)]
@@ -163,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
                     .clone()
                     .is_some_and(|val| val.is_empty())
             {
-                let connection_url = pg::run_embedded().await?;
+                let connection_url = pg::run_embedded(dev_options.postgres_temporary).await?;
                 let temp_pool = pg::create_pool(connection_url.clone()).await?;
                 println!("Migrating database...");
                 pg::migrate_pg(&temp_pool).await?;

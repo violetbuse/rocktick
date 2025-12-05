@@ -50,17 +50,20 @@ impl BrokerTrait for Broker {
             let mut stream = sqlx::query!(
                 r#"
               WITH jobs_to_lock AS (
-                SELECT id
-                FROM scheduled_jobs
+                SELECT job.id
+                FROM scheduled_jobs as job
+                LEFT JOIN tenants ON
+                  job.tenant_id = tenants.id
                 WHERE lock_nonce IS NULL
                   AND execution_id IS NULL
+                  AND (tenants.tokens > 0 OR tenants.tokens IS NULL)
                   AND (
                     (region = $1 AND scheduled_at <= now() + interval '5 seconds')
                     OR (scheduled_at <= now() - interval '5 seconds')
                   )
                 ORDER BY scheduled_at
                 LIMIT $2
-                FOR UPDATE SKIP LOCKED
+                FOR UPDATE OF job SKIP LOCKED
               )
               UPDATE scheduled_jobs j
               SET lock_nonce = extract(epoch from now())
@@ -136,7 +139,7 @@ impl BrokerTrait for Broker {
 
                             let scheduled = sqlx::query!(
                                 r#"
-                            SELECT id, lock_nonce
+                            SELECT id, lock_nonce, tenant_id
                             FROM scheduled_jobs
                             WHERE id = $1
                               AND lock_nonce = $2
@@ -230,6 +233,14 @@ impl BrokerTrait for Broker {
                             )
                             .execute(&mut *tx)
                             .await?;
+
+                            if let Some(tenant_id) = scheduled.tenant_id {
+                              sqlx::query!(r#"
+                                UPDATE tenants
+                                SET tokens = tokens - 1
+                                WHERE id = $1;
+                                "#, tenant_id).execute(&mut *tx).await?;
+                            }
 
                             tx.commit().await?;
 

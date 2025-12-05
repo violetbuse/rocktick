@@ -1,4 +1,13 @@
 
+CREATE TABLE tenants (
+  id VARCHAR(255) NOT NULL PRIMARY KEY,
+  tokens INTEGER NOT NULL,
+  max_tokens INTEGER NOT NULL,
+  increment INTEGER NOT NULL,
+  period INTERVAL NOT NULL,
+  next_increment TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE http_requests (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
   method VARCHAR(10) NOT NULL,
@@ -17,6 +26,7 @@ CREATE TABLE http_responses (
 CREATE TABLE one_off_jobs (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
   region TEXT NOT NULL,
+  tenant_id VARCHAR(255) REFERENCES tenants(id),
   request_id VARCHAR(255) NOT NULL UNIQUE REFERENCES http_requests(id),
   execute_at BIGINT NOT NULL,
   timeout_ms INTEGER NOT NULL,
@@ -28,6 +38,7 @@ CREATE TABLE one_off_jobs (
 CREATE TABLE cron_jobs (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
   region TEXT NOT NULL,
+  tenant_id VARCHAR(255) REFERENCES tenants(id),
   request_id VARCHAR(255) NOT NULL UNIQUE REFERENCES http_requests(id),
   schedule TEXT NOT NULL,
   timeout_ms INTEGER NOT NULL,
@@ -52,6 +63,7 @@ CREATE TABLE scheduled_jobs (
   hash INTEGER NOT NULL,
   lock_nonce INTEGER,
   region TEXT NOT NULL,
+  tenant_id VARCHAR(255) REFERENCES tenants(id),
   one_off_job_id VARCHAR(255) REFERENCES one_off_jobs(id),
   cron_job_id VARCHAR(255) REFERENCES cron_jobs(id),
   -- Workflows to be implemented later
