@@ -49,6 +49,8 @@ CREATE TABLE scheduled_jobs (
   region TEXT NOT NULL,
   one_off_job_id VARCHAR(255) REFERENCES one_off_jobs(id),
   cron_job_id VARCHAR(255) REFERENCES cron_jobs(id),
+  -- Workflows to be implemented later
+  workflow_id VARCHAR(255),
   retry_for_id VARCHAR(255) REFERENCES scheduled_jobs(id),
   scheduled_at TIMESTAMP NOT NULL,
   request_id VARCHAR(255) NOT NULL UNIQUE REFERENCES http_requests(id),
