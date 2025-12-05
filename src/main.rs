@@ -112,6 +112,8 @@ impl TryFrom<DevOptions> for SchedulerOptions {
 pub struct ApiOptions {
     #[arg(long, env = "PORT", default_value_t = 3000)]
     port: usize,
+    #[arg(long, env = "VALID_REGIONS")]
+    valid_regions: String,
     #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
 }
@@ -125,6 +127,7 @@ impl TryFrom<DevOptions> for ApiOptions {
             postgres_url: value
                 .postgres_url
                 .ok_or(anyhow!("No postgres url provided!"))?,
+            valid_regions: value.region,
         })
     }
 }

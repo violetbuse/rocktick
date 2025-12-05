@@ -1,0 +1,2 @@
+-- Modify "scheduled_jobs" table
+ALTER TABLE "scheduled_jobs" ADD COLUMN "cron_job_id" character varying(255) NULL, ADD COLUMN "retry_for_id" character varying(255) NULL, ADD CONSTRAINT "scheduled_jobs_cron_job_id_fkey" FOREIGN KEY ("cron_job_id") REFERENCES "cron_jobs" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION, ADD CONSTRAINT "scheduled_jobs_retry_for_id_fkey" FOREIGN KEY ("retry_for_id") REFERENCES "scheduled_jobs" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION;

@@ -9,19 +9,27 @@ use crate::ApiOptions;
 pub struct Config {
     port: usize,
     pool: Pool<Postgres>,
+    valid_regions: Vec<String>,
 }
 
 impl Config {
     pub async fn from_cli(options: ApiOptions, pool: Pool<Postgres>) -> Self {
+        let valid_regions = options
+            .valid_regions
+            .split(",")
+            .map(|s| s.trim().to_string())
+            .collect();
+
         Self {
             port: options.port,
+            valid_regions,
             pool,
         }
     }
 }
 
 pub async fn start(config: Config) -> anyhow::Result<()> {
-    tokio::time::sleep(Duration::from_secs(rand::random_range(0..10))).await;
+    println!("Valid Regions: {:?}", &config.valid_regions);
 
     let app = Route::new().at("/hello/:name", poem::get(hello));
 

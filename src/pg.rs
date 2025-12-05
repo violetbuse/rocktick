@@ -3,7 +3,7 @@ use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 
 pub async fn create_pool(postgres_url: String) -> anyhow::Result<Pool<Postgres>> {
     Ok(PgPoolOptions::new()
-        .max_connections(5)
+        .max_connections(10)
         .min_connections(2)
         .connect(&postgres_url)
         .await?)
