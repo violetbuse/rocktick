@@ -1,8 +1,7 @@
 use axum::{
-    Json, Router,
+    Json,
     extract::{Path, State},
     response::IntoResponse,
-    routing::{get, post},
 };
 use chrono::TimeDelta;
 use http::StatusCode;
@@ -12,7 +11,7 @@ use sqlx::postgres::types::PgInterval;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::api::{ApiError, ApiResponse, Context, JsonBody};
+use crate::api::{ApiError, Context, JsonBody};
 
 #[derive(Serialize, ToSchema)]
 struct Tenant {

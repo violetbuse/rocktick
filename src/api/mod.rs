@@ -6,10 +6,7 @@ use axum_macros::FromRequest;
 use http::StatusCode;
 use serde::Serialize;
 use sqlx::{Pool, Postgres};
-use utoipa::{
-    OpenApi, ToSchema,
-    openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
-};
+use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};
 
