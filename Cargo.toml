@@ -5,16 +5,17 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
+axum = { version = "0.8.7", features = ["macros"] }
+axum-macros = "0.5.0"
 chrono = "0.4.42"
 clap = { version = "4.5.53", features = ["cargo", "derive", "env", "string"] }
 croner = "3.0.1"
 dotenvy = "0.15.7"
 futures = "0.3.31"
+http = "1.4.0"
 hyper-rustls = "0.27.7"
 maplit = "1.0.2"
 nanoid = "0.4.0"
-poem = "3.1.12"
-poem-openapi = { version = "5.1.16", features = ["chrono", "scalar"] }
 postgresql_embedded = "0.20.0"
 prost = "0.14.1"
 rand = "0.9.2"
@@ -29,6 +30,9 @@ tokio-stream = "0.1.17"
 tonic = "0.14.2"
 tonic-prost = "0.14.2"
 url = "2.5.7"
+utoipa = { version = "5.4.0", features = ["macros", "axum_extras"] }
+utoipa-axum = "0.2.0"
+utoipa-scalar = { version = "0.3.0", features = ["axum"] }
 webpki-roots = "1.0.4"
 
 [build-dependencies]
