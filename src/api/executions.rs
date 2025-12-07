@@ -5,8 +5,10 @@ use axum::{
     extract::{Path, Query, State},
     response::IntoResponse,
 };
+use chrono::{DateTime, Utc};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
+use sqlx::{Pool, Postgres};
 use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -59,6 +61,82 @@ struct QueryParams {
     workflow_id: Option<String>,
 }
 
+struct IntermediateExecution {
+    id: String,
+    region: String,
+    scheduled_at: DateTime<Utc>,
+    success: Option<bool>,
+    executed_at: Option<DateTime<Utc>>,
+    response_error: Option<String>,
+    method: String,
+    url: String,
+    req_headers: Vec<String>,
+    req_body: Option<String>,
+    status: Option<i32>,
+    res_headers: Option<Vec<String>>,
+    res_body: Option<String>,
+    timeout_ms: i32,
+    max_retries: i32,
+    max_response_bytes: i32,
+    tenant_id: Option<String>,
+    one_off_job_id: Option<String>,
+    cron_job_id: Option<String>,
+    workflow_id: Option<String>,
+    retry_for_id: Option<String>,
+}
+
+impl IntermediateExecution {
+    pub fn to_execution(&self) -> Execution {
+        Execution {
+            id: self.id.clone(),
+            region: self.region.clone(),
+            scheduled_at: self.scheduled_at.timestamp(),
+            executed_at: self.executed_at.map(|time| time.timestamp()),
+            success: self.success,
+            request: Request {
+                method: self.method.clone(),
+                url: self.url.clone(),
+                headers: self
+                    .req_headers
+                    .iter()
+                    .filter_map(|entry| {
+                        let mut parts = entry.splitn(2, ":");
+                        let key = parts.next()?.trim().to_string();
+                        let value = parts.next()?.trim().to_string();
+                        Some((key, value))
+                    })
+                    .collect(),
+                body: self.req_body.clone(),
+            },
+            response: match (self.status, self.res_headers.clone(), self.res_body.clone()) {
+                (Some(status), Some(headers), Some(body)) => Some(Response {
+                    status,
+                    headers: headers
+                        .iter()
+                        .filter_map(|entry| {
+                            let mut parts = entry.splitn(2, ":");
+                            let key = parts.next()?.trim().to_string();
+                            let value = parts.next()?.trim().to_string();
+                            Some((key, value))
+                        })
+                        .collect(),
+                    body,
+                }),
+                _ => None,
+            },
+            response_error: self.response_error.clone(),
+            timeout_ms: self.timeout_ms,
+            max_retries: self.max_retries,
+            max_response_bytes: self.max_response_bytes,
+            tenant_id: self.tenant_id.clone(),
+            one_off_job_id: self.one_off_job_id.clone(),
+            cron_job_id: self.cron_job_id.clone(),
+            workflow_id: self.workflow_id.clone(),
+            retry_for: self.retry_for_id.clone(),
+        }
+    }
+}
+
 /// List executions
 #[utoipa::path(
   get,
@@ -74,7 +152,10 @@ async fn list_executions(
     TenantId(tenant_id): TenantId,
     Query(params): Query<QueryParams>,
 ) -> Result<ApiListResponse<Execution>, ApiError> {
-    let results = sqlx::query!(
+    let limit = params.limit.unwrap_or(15).min(1000);
+
+    let results = sqlx::query_as!(
+        IntermediateExecution,
         r#"
       SELECT
         job.id,
@@ -117,7 +198,7 @@ async fn list_executions(
       ORDER BY job.id ASC
       LIMIT $1;
       "#,
-        15,
+        limit,
         tenant_id,
         params.completed,
         params.cursor,
@@ -136,58 +217,13 @@ async fn list_executions(
 
     let executions: Vec<Execution> = results
         .iter()
-        .map(|row| Execution {
-            id: row.id.clone(),
-            region: row.region.clone(),
-            scheduled_at: row.scheduled_at.timestamp(),
-            executed_at: row.executed_at.map(|time| time.timestamp()),
-            success: row.success,
-            request: Request {
-                method: row.method.clone(),
-                url: row.url.clone(),
-                headers: row
-                    .req_headers
-                    .iter()
-                    .filter_map(|entry| {
-                        let mut parts = entry.splitn(2, ":");
-                        let key = parts.next()?.trim().to_string();
-                        let value = parts.next()?.trim().to_string();
-                        Some((key, value))
-                    })
-                    .collect(),
-                body: row.req_body.clone(),
-            },
-            response: match (row.status, row.res_headers.clone(), row.res_body.clone()) {
-                (Some(status), Some(headers), Some(body)) => Some(Response {
-                    status,
-                    headers: headers
-                        .iter()
-                        .filter_map(|entry| {
-                            let mut parts = entry.splitn(2, ":");
-                            let key = parts.next()?.trim().to_string();
-                            let value = parts.next()?.trim().to_string();
-                            Some((key, value))
-                        })
-                        .collect(),
-                    body,
-                }),
-                _ => None,
-            },
-            response_error: row.response_error.clone(),
-            timeout_ms: row.timeout_ms,
-            max_retries: row.max_retries,
-            max_response_bytes: row.max_response_bytes,
-            tenant_id: row.tenant_id.clone(),
-            one_off_job_id: row.one_off_job_id.clone(),
-            cron_job_id: row.cron_job_id.clone(),
-            workflow_id: row.workflow_id.clone(),
-            retry_for: row.retry_for_id.clone(),
-        })
+        .map(IntermediateExecution::to_execution)
         .collect();
 
     let last_execution = executions.last().map(|exe| exe.id.clone());
 
     Ok(ApiListResponse {
+        count: executions.len(),
         data: executions,
         cursor: last_execution,
     })
@@ -218,7 +254,8 @@ async fn get_execution(
     Path(execution_id): Path<String>,
     TenantId(tenant_id): TenantId,
 ) -> Result<Execution, ApiError> {
-    let execution = sqlx::query!(
+    let execution = sqlx::query_as!(
+        IntermediateExecution,
         r#"
     SELECT
       job.id,
@@ -267,61 +304,81 @@ async fn get_execution(
         return Err(ApiError::not_found());
     }
 
-    let exec_row = execution.unwrap();
+    let execution = execution.unwrap();
 
-    let execution = Execution {
-        id: exec_row.id.clone(),
-        region: exec_row.region.clone(),
-        scheduled_at: exec_row.scheduled_at.timestamp(),
-        executed_at: exec_row.executed_at.map(|time| time.timestamp()),
-        success: exec_row.success,
-        request: Request {
-            method: exec_row.method.clone(),
-            url: exec_row.url.clone(),
-            headers: exec_row
-                .req_headers
-                .iter()
-                .filter_map(|entry| {
-                    let mut parts = entry.splitn(2, ":");
-                    let key = parts.next()?.trim().to_string();
-                    let value = parts.next()?.trim().to_string();
-                    Some((key, value))
-                })
-                .collect(),
-            body: exec_row.req_body.clone(),
-        },
-        response: match (
-            exec_row.status,
-            exec_row.res_headers.clone(),
-            exec_row.res_body.clone(),
-        ) {
-            (Some(status), Some(headers), Some(body)) => Some(Response {
-                status,
-                headers: headers
-                    .iter()
-                    .filter_map(|entry| {
-                        let mut parts = entry.splitn(2, ":");
-                        let key = parts.next()?.trim().to_string();
-                        let value = parts.next()?.trim().to_string();
-                        Some((key, value))
-                    })
-                    .collect(),
-                body,
-            }),
-            _ => None,
-        },
-        response_error: exec_row.response_error.clone(),
-        timeout_ms: exec_row.timeout_ms,
-        max_retries: exec_row.max_retries,
-        max_response_bytes: exec_row.max_response_bytes,
-        tenant_id: exec_row.tenant_id.clone(),
-        one_off_job_id: exec_row.one_off_job_id.clone(),
-        cron_job_id: exec_row.cron_job_id.clone(),
-        workflow_id: exec_row.workflow_id.clone(),
-        retry_for: exec_row.retry_for_id.clone(),
-    };
+    Ok(execution.to_execution())
+}
 
-    Ok(execution)
+pub async fn get_executions(
+    jobs: Vec<String>,
+    tenant_id: Option<String>,
+    count_per: i64,
+    pool: &Pool<Postgres>,
+) -> Result<Vec<Execution>, sqlx::Error> {
+    let execution = sqlx::query_as!(
+        IntermediateExecution,
+        r#"
+  SELECT
+    job.id,
+    job.region,
+    job.scheduled_at,
+    exe.success as "success?",
+    exe.executed_at as "executed_at?",
+    exe.response_error as "response_error?",
+    req.method,
+    req.url,
+    req.headers as req_headers,
+    req.body as req_body,
+    res.status as "status?",
+    res.headers as "res_headers?",
+    res.body as "res_body?",
+    job.timeout_ms,
+    job.max_retries,
+    job.max_response_bytes,
+    job.tenant_id,
+    job.one_off_job_id,
+    job.cron_job_id,
+    job.workflow_id,
+    job.retry_for_id
+  FROM (
+    SELECT
+      *,
+      ROW_NUMBER() OVER (PARTITION BY
+        tenant_id,
+        one_off_job_id,
+        cron_job_id,
+        workflow_id
+          ORDER BY
+            scheduled_at DESC
+        ) AS row_num
+    FROM scheduled_jobs
+    WHERE
+      ($1::text[] IS NULL OR
+        one_off_job_id = ANY($1) OR
+        cron_job_id = ANY($1) OR
+        workflow_id = ANY($1))
+      AND ($2::text IS NULL OR tenant_id = $2)
+  ) job
+  INNER JOIN http_requests as req
+    ON req.id = job.request_id
+  LEFT JOIN job_executions exe
+    ON job.execution_id = exe.id
+  LEFT JOIN http_responses res
+    ON exe.response_id = res.id
+  WHERE
+    job.row_num <= $3
+  "#,
+        &jobs,
+        tenant_id,
+        count_per
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(execution
+        .iter()
+        .map(IntermediateExecution::to_execution)
+        .collect())
 }
 
 pub fn init_router() -> OpenApiRouter<Context> {

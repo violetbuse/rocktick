@@ -1,12 +1,73 @@
-use nanoid::nanoid;
+use std::{
+    sync::atomic::{AtomicU64, Ordering},
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
-const ALPHABET: [char; 63] = [
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
-    'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B',
-    'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U',
-    'V', 'W', 'X', 'Y', 'Z', '_',
-];
+use once_cell::sync::Lazy;
+use rand::Rng;
+use ulid::Ulid;
+
+struct LockFreeUlidGenerator {
+    last_timestamp: AtomicU64,
+    counter: AtomicU64,
+}
+
+impl LockFreeUlidGenerator {
+    const MAX_COUNTER: u64 = 0xFFFF_FFFF; // 32-bit counter
+
+    fn new() -> Self {
+        Self {
+            last_timestamp: AtomicU64::new(0),
+            counter: AtomicU64::new(0),
+        }
+    }
+
+    fn generate(&self) -> Ulid {
+        loop {
+            // current time in milliseconds
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("SystemTime before UNIX EPOCH")
+                .as_millis() as u64;
+
+            let last = self.last_timestamp.load(Ordering::Relaxed);
+
+            if now > last {
+                // Time has advanced, reset counter
+                if self
+                    .last_timestamp
+                    .compare_exchange(last, now, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_ok()
+                {
+                    let system_time = UNIX_EPOCH + Duration::from_millis(now);
+
+                    self.counter.store(0, Ordering::SeqCst);
+                    return Ulid::from_datetime_with_source(system_time, &mut rand::rng());
+                }
+            } else {
+                // Same millisecond, increment counter
+                let cnt = self.counter.fetch_add(1, Ordering::SeqCst);
+                if cnt < Self::MAX_COUNTER {
+                    // combine timestamp + counter for deterministic monotonic ULID
+                    let mut bytes = [0u8; 16];
+                    let ulid_timestamp = now.to_be_bytes();
+                    bytes[..6].copy_from_slice(&ulid_timestamp[2..8]); // 48 bits timestamp
+                    bytes[6..10].copy_from_slice(&(cnt as u32).to_be_bytes()); // 32-bit counter
+                    rand::rng().fill(&mut bytes[10..]); // remaining 48-bit random
+                    return Ulid::from_bytes(bytes);
+                } else {
+                    // Wait for next millisecond
+                    std::thread::yield_now();
+                }
+            }
+        }
+    }
+}
+
+static GENERATOR: Lazy<LockFreeUlidGenerator> = Lazy::new(LockFreeUlidGenerator::new);
 
 pub fn generate(prefix: &str) -> String {
-    format!("{prefix}_{}", nanoid!(25, &ALPHABET))
+    let id = GENERATOR.generate().to_string();
+
+    format!("{prefix}_{}", id)
 }

@@ -162,6 +162,7 @@ impl ApiError {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ApiListResponse<T: Serialize + ToSchema> {
     data: Vec<T>,
+    count: usize,
     cursor: Option<String>,
 }
 
