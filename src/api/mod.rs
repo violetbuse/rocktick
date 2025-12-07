@@ -1,6 +1,7 @@
 mod cron;
 mod publish;
 mod tenants;
+mod verify;
 
 use axum::{
     Json,
@@ -172,6 +173,7 @@ fn init_router() -> OpenApiRouter<Context> {
         .merge(tenants::init_router())
         .merge(publish::init_router())
         .merge(cron::init_router())
+        .merge(verify::init_router())
 }
 
 async fn auth_middleware(State(ctx): State<Context>, req: Request, next: Next) -> Response {
