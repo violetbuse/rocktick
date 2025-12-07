@@ -8,6 +8,7 @@ use tokio::select;
 mod api;
 mod broker;
 mod executor;
+mod id;
 mod pg;
 mod scheduler;
 
@@ -54,6 +55,8 @@ pub struct DevOptions {
     postgres_url: Option<String>,
     #[arg(long, default_value_t = true)]
     postgres_temporary: bool,
+    #[arg(long, env = "AUTH_KEY")]
+    auth_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Parser)]
@@ -118,6 +121,8 @@ pub struct ApiOptions {
     valid_regions: String,
     #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
+    #[arg(long, env = "AUTH_KEY")]
+    auth_key: Option<String>,
 }
 
 impl TryFrom<DevOptions> for ApiOptions {
@@ -130,6 +135,7 @@ impl TryFrom<DevOptions> for ApiOptions {
                 .postgres_url
                 .ok_or(anyhow!("No postgres url provided!"))?,
             valid_regions: value.region,
+            auth_key: value.auth_key,
         })
     }
 }

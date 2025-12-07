@@ -4,8 +4,9 @@ use std::{
 };
 
 use chrono::DateTime;
-use nanoid::nanoid;
 use sqlx::{Pool, Postgres};
+
+use crate::id;
 
 async fn schedule_one_off_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> anyhow::Result<()> {
     let mut tx = pool.begin().await?;
@@ -43,7 +44,7 @@ async fn schedule_one_off_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> 
 
     let scheduled_time = DateTime::from_timestamp_secs(to_schedule.execute_at);
 
-    let new_job_id = format!("scheduled_{}", nanoid!());
+    let new_job_id = id::generate("scheduled");
 
     let mut hasher = DefaultHasher::new();
     new_job_id.hash(&mut hasher);

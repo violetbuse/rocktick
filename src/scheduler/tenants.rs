@@ -37,7 +37,7 @@ async fn schedule_tenant_token_increase(
 
     let time_since_scheduled_increment = Utc::now() - tenant.next_increment;
     let next_time = if new_tokens == tenant.max_tokens {
-        Utc::now() + max(TimeDelta::minutes(1), period_time_delta)
+        Utc::now() + max(TimeDelta::minutes(5), period_time_delta)
     } else if time_since_scheduled_increment > TimeDelta::minutes(5) {
         Utc::now() + period_time_delta
     } else {

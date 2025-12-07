@@ -5,13 +5,15 @@ use axum::{
 };
 use chrono::TimeDelta;
 use http::StatusCode;
-use nanoid::nanoid;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::types::PgInterval;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::api::{ApiError, Context, JsonBody};
+use crate::{
+    api::{ApiError, Context, JsonBody},
+    id,
+};
 
 #[derive(Serialize, ToSchema)]
 struct Tenant {
@@ -49,7 +51,7 @@ async fn create_tenant(
     JsonBody(create_opts): JsonBody<CreateTenant>,
 ) -> Result<Tenant, ApiError> {
     let (period, increment) = compute_incr_and_period(create_opts.tok_per_day)?;
-    let new_id = format!("tenant_{}", nanoid!());
+    let new_id = id::generate("tenant");
     let starting_tokens = create_opts.tok_per_day;
     let new_tenant = sqlx::query!(
         r#"

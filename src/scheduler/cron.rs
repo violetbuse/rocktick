@@ -6,8 +6,9 @@ use std::{
 
 use chrono::{TimeDelta, Utc};
 use croner::Cron;
-use nanoid::nanoid;
 use sqlx::{Pool, Postgres};
+
+use crate::id;
 
 async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> anyhow::Result<()> {
     let mut tx = pool.begin().await?;
@@ -114,7 +115,7 @@ async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> any
     }
 
     for scheduled_time in times {
-        let new_job_id = format!("scheduled_{}", nanoid!());
+        let new_job_id = id::generate("scheduled");
 
         let mut hasher = DefaultHasher::new();
         new_job_id.hash(&mut hasher);
