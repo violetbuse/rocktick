@@ -20,7 +20,7 @@ impl IntoResponse for JobVerification {
     }
 }
 
-/// Verify that a request is actually coming from rocktick.
+/// Verify job
 ///
 /// pass in the value of the 'Rocktick-Job-Id' header and
 /// this method will return whether it actually originated
