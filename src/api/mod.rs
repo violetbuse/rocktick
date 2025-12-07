@@ -6,13 +6,13 @@ mod verify;
 
 use axum::{
     Json, Router,
-    extract::{Request, State, rejection::JsonRejection},
+    extract::{FromRequest, FromRequestParts, Request, State, rejection::JsonRejection},
     middleware::Next,
     response::{IntoResponse, Response},
     routing::get,
 };
 
-use axum_macros::FromRequest;
+use futures::never::Never;
 use http::StatusCode;
 use serde::Serialize;
 use serde_json::Value;
@@ -171,6 +171,29 @@ where
 {
     fn into_response(self) -> axum::response::Response {
         (http::StatusCode::OK, Json(self)).into_response()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TenantId(Option<String>);
+
+impl<S> FromRequestParts<S> for TenantId
+where
+    S: Send + Sync,
+{
+    type Rejection = Never;
+
+    async fn from_request_parts(
+        parts: &mut http::request::Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(TenantId(
+            parts
+                .headers
+                .get("tenant-id")
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.to_string()),
+        ))
     }
 }
 

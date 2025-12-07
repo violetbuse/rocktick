@@ -1,12 +1,16 @@
 use std::collections::HashMap;
 
-use axum::extract::{Query, State};
-use http::HeaderMap;
+use axum::{
+    Json,
+    extract::{Path, Query, State},
+    response::IntoResponse,
+};
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::api::{ApiError, ApiListResponse, Context};
+use crate::api::{ApiError, ApiListResponse, Context, TenantId};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct Execution {
@@ -49,6 +53,10 @@ struct QueryParams {
     from: Option<i64>,
     to: Option<i64>,
     completed: Option<bool>,
+    limit: Option<i64>,
+    one_off_job_id: Option<String>,
+    cron_id: Option<String>,
+    workflow_id: Option<String>,
 }
 
 /// List executions
@@ -63,14 +71,9 @@ struct QueryParams {
 )]
 async fn list_executions(
     State(ctx): State<Context>,
-    headers: HeaderMap,
+    TenantId(tenant_id): TenantId,
     Query(params): Query<QueryParams>,
 ) -> Result<ApiListResponse<Execution>, ApiError> {
-    let tenant_id = headers
-        .get("tenant-id")
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v.to_string());
-
     let results = sqlx::query!(
         r#"
       SELECT
@@ -103,19 +106,26 @@ async fn list_executions(
       LEFT JOIN http_responses res
         ON exe.response_id = res.id
       WHERE
-        ($1::text IS NULL OR job.tenant_id = $1)
-        AND ($2::bool IS NULL OR exe.id IS NOT NULL)
-        AND ($3::text IS NULL OR job.id > $3)
-        AND ($4::bigint IS NULL OR job.scheduled_at >= to_timestamp($4))
-        AND ($5::bigint IS NULL OR job.scheduled_at <= to_timestamp($5))
+        ($2::text IS NULL OR job.tenant_id = $2)
+        AND ($3::bool IS NULL OR exe.id IS NULL != $3)
+        AND ($4::text IS NULL OR job.id > $4)
+        AND ($5::bigint IS NULL OR job.scheduled_at >= to_timestamp($5))
+        AND ($6::bigint IS NULL OR job.scheduled_at <= to_timestamp($6))
+        AND ($7::text IS NULL OR job.one_off_job_id = $7)
+        AND ($8::text IS NULL OR job.cron_job_id = $8)
+        AND ($9::text IS NULL OR job.workflow_id = $9)
       ORDER BY job.id ASC
-      LIMIT 100;
+      LIMIT $1;
       "#,
+        15,
         tenant_id,
         params.completed,
         params.cursor,
         params.from,
-        params.to
+        params.to,
+        params.one_off_job_id,
+        params.cron_id,
+        params.workflow_id,
     )
     .fetch_all(&ctx.pool)
     .await
@@ -183,6 +193,139 @@ async fn list_executions(
     })
 }
 
+impl IntoResponse for Execution {
+    fn into_response(self) -> axum::response::Response {
+        (StatusCode::OK, Json(self)).into_response()
+    }
+}
+
+/// Get Execution
+#[utoipa::path(
+    get,
+    path = "/api/executions/{execution_id}",
+    responses(
+        (status = 200, description = "Get Execution", body = Execution),
+        (status = "4XX", description = "Execution not found", body = ApiError),
+        (status = "5XX", description = "Internal Server Error", body = ApiError),
+    ),
+    params(
+        ("execution_id" = String, Path, description = "Execution ID"),
+    ),
+    tag = "executions"
+)]
+async fn get_execution(
+    State(ctx): State<Context>,
+    Path(execution_id): Path<String>,
+    TenantId(tenant_id): TenantId,
+) -> Result<Execution, ApiError> {
+    let execution = sqlx::query!(
+        r#"
+    SELECT
+      job.id,
+      job.region,
+      job.scheduled_at,
+      exe.success as "success?",
+      exe.executed_at as "executed_at?",
+      exe.response_error as "response_error?",
+      req.method,
+      req.url,
+      req.headers as req_headers,
+      req.body as req_body,
+      res.status as "status?",
+      res.headers as "res_headers?",
+      res.body as "res_body?",
+      job.timeout_ms,
+      job.max_retries,
+      job.max_response_bytes,
+      job.tenant_id,
+      job.one_off_job_id,
+      job.cron_job_id,
+      job.workflow_id,
+      job.retry_for_id
+    FROM scheduled_jobs as job
+    INNER JOIN http_requests as req
+      ON req.id = job.request_id
+    LEFT JOIN job_executions exe
+      ON job.execution_id = exe.id
+    LEFT JOIN http_responses res
+      ON exe.response_id = res.id
+    WHERE
+      job.id = $1 AND
+      ($2::text IS NULL OR job.tenant_id = $2)
+    "#,
+        execution_id,
+        tenant_id
+    )
+    .fetch_optional(&ctx.pool)
+    .await
+    .map_err(|err| {
+        eprintln!("Error fetching execution {execution_id}: {err:?}");
+        ApiError::internal_server_error(None)
+    })?;
+
+    if execution.is_none() {
+        return Err(ApiError::not_found());
+    }
+
+    let exec_row = execution.unwrap();
+
+    let execution = Execution {
+        id: exec_row.id.clone(),
+        region: exec_row.region.clone(),
+        scheduled_at: exec_row.scheduled_at.timestamp(),
+        executed_at: exec_row.executed_at.map(|time| time.timestamp()),
+        success: exec_row.success,
+        request: Request {
+            method: exec_row.method.clone(),
+            url: exec_row.url.clone(),
+            headers: exec_row
+                .req_headers
+                .iter()
+                .filter_map(|entry| {
+                    let mut parts = entry.splitn(2, ":");
+                    let key = parts.next()?.trim().to_string();
+                    let value = parts.next()?.trim().to_string();
+                    Some((key, value))
+                })
+                .collect(),
+            body: exec_row.req_body.clone(),
+        },
+        response: match (
+            exec_row.status,
+            exec_row.res_headers.clone(),
+            exec_row.res_body.clone(),
+        ) {
+            (Some(status), Some(headers), Some(body)) => Some(Response {
+                status,
+                headers: headers
+                    .iter()
+                    .filter_map(|entry| {
+                        let mut parts = entry.splitn(2, ":");
+                        let key = parts.next()?.trim().to_string();
+                        let value = parts.next()?.trim().to_string();
+                        Some((key, value))
+                    })
+                    .collect(),
+                body,
+            }),
+            _ => None,
+        },
+        response_error: exec_row.response_error.clone(),
+        timeout_ms: exec_row.timeout_ms,
+        max_retries: exec_row.max_retries,
+        max_response_bytes: exec_row.max_response_bytes,
+        tenant_id: exec_row.tenant_id.clone(),
+        one_off_job_id: exec_row.one_off_job_id.clone(),
+        cron_job_id: exec_row.cron_job_id.clone(),
+        workflow_id: exec_row.workflow_id.clone(),
+        retry_for: exec_row.retry_for_id.clone(),
+    };
+
+    Ok(execution)
+}
+
 pub fn init_router() -> OpenApiRouter<Context> {
-    OpenApiRouter::new().routes(routes!(list_executions))
+    OpenApiRouter::new()
+        .routes(routes!(list_executions))
+        .routes(routes!(get_execution))
 }
