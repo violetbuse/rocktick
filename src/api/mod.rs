@@ -1,4 +1,5 @@
 mod cron;
+mod executions;
 mod publish;
 mod tenants;
 mod verify;
@@ -159,11 +160,12 @@ impl ApiError {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct ApiResponse<T: Serialize + ToSchema> {
-    data: T,
+pub struct ApiListResponse<T: Serialize + ToSchema> {
+    data: Vec<T>,
+    cursor: Option<String>,
 }
 
-impl<T> IntoResponse for ApiResponse<T>
+impl<T> IntoResponse for ApiListResponse<T>
 where
     T: Serialize + ToSchema,
 {
@@ -209,6 +211,7 @@ fn init_router() -> OpenApiRouter<Context> {
         .merge(publish::init_router())
         .merge(cron::init_router())
         .merge(verify::init_router())
+        .merge(executions::init_router())
 }
 
 fn create_router() -> Router<Context> {
