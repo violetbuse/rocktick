@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::sync::OnceLock;
+
 use anyhow::{Ok, anyhow};
 use clap::{Parser, Subcommand};
 use sqlx::postgres::PgPoolOptions;
@@ -11,6 +13,13 @@ mod executor;
 mod id;
 mod pg;
 mod scheduler;
+
+#[derive(Debug, Clone)]
+pub struct GlobalConfig {
+    is_dev: bool,
+}
+
+pub static GLOBAL_CONFIG: OnceLock<GlobalConfig> = OnceLock::new();
 
 #[derive(Debug, Clone, Parser)]
 #[command(
@@ -27,7 +36,7 @@ pub struct Cli {
     command: Option<Commands>,
 }
 
-#[derive(Debug, Clone, Subcommand)]
+#[derive(Debug, Clone, Subcommand, PartialEq, Eq)]
 pub enum Commands {
     /// Runs the dev server
     Dev(DevOptions),
@@ -43,7 +52,7 @@ pub enum Commands {
     Migrate(MigrationOptions),
 }
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, PartialEq, Eq)]
 pub struct DevOptions {
     #[arg(long, default_value_t = 3000)]
     api_port: usize,
@@ -59,7 +68,7 @@ pub struct DevOptions {
     auth_key: Option<String>,
 }
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, PartialEq, Eq)]
 pub struct ExecutorOptions {
     broker_url: String,
     region: String,
@@ -76,7 +85,7 @@ impl TryFrom<DevOptions> for ExecutorOptions {
     }
 }
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, PartialEq, Eq)]
 pub struct BrokerOptions {
     port: usize,
     postgres_url: String,
@@ -95,7 +104,7 @@ impl TryFrom<DevOptions> for BrokerOptions {
     }
 }
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, PartialEq, Eq)]
 pub struct SchedulerOptions {
     #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
@@ -113,7 +122,7 @@ impl TryFrom<DevOptions> for SchedulerOptions {
     }
 }
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, PartialEq, Eq)]
 pub struct ApiOptions {
     #[arg(long, env = "PORT", default_value_t = 3000)]
     port: usize,
@@ -140,7 +149,7 @@ impl TryFrom<DevOptions> for ApiOptions {
     }
 }
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, PartialEq, Eq)]
 pub struct MigrationOptions {
     #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
@@ -151,6 +160,14 @@ async fn main() -> anyhow::Result<()> {
     let _ = dotenvy::dotenv_override();
 
     let cli = Cli::parse();
+
+    let is_dev = cli.command.is_none() || matches!(cli.command, Some(Commands::Dev(_)));
+
+    let global_config = GlobalConfig { is_dev };
+
+    GLOBAL_CONFIG
+        .set(global_config)
+        .expect("Failed to set global config");
 
     match cli.command {
         None | Some(Commands::Dev(_)) => {

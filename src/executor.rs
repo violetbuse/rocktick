@@ -16,7 +16,7 @@ use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tonic::Request;
 
 use crate::{
-    ExecutorOptions,
+    ExecutorOptions, GLOBAL_CONFIG,
     broker::{self, GetJobsRequest, JobExecution, JobSpec, broker_client::BrokerClient},
 };
 
@@ -76,8 +76,14 @@ async fn resolve_public_ip(url: &str) -> Option<SocketAddr> {
     let addrs = lookup_host((host, port)).await.ok()?;
 
     let mut public_addr = None;
+    let allow_private_addrs = GLOBAL_CONFIG.get().unwrap().is_dev;
 
     for addr in addrs {
+        if allow_private_addrs {
+            public_addr = Some(addr);
+            break;
+        }
+
         if !is_private_ip(&addr.ip()) {
             public_addr = Some(addr);
             break;
@@ -88,6 +94,7 @@ async fn resolve_public_ip(url: &str) -> Option<SocketAddr> {
 }
 
 async fn send_request_to_ip(
+    job_id: &str,
     url: &str,
     ip_addr: SocketAddr,
     method: String,
@@ -112,6 +119,8 @@ async fn send_request_to_ip(
     for (header_name, value) in headers {
         req = req.header(header_name, value);
     }
+
+    req = req.header("Rocktick-Job-Id", job_id);
 
     if let Some(body) = body {
         req = req.body(body);
@@ -149,6 +158,7 @@ async fn run_job(job: JobSpec, state: ExecutorState) {
     let response = match public_addr {
         Ok(addr) => {
             send_request_to_ip(
+                &job.job_id,
                 &job.url,
                 addr,
                 job.method.clone(),
