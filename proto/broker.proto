@@ -6,9 +6,7 @@ service Broker {
   rpc RecordExecution(stream JobExecution) returns (Empty);
 }
 
-message GetJobsRequest {
-  string region = 1;
-}
+message GetJobsRequest { string region = 1; }
 
 message JobSpec {
   string job_id = 1;
@@ -32,6 +30,7 @@ message JobExecution {
   string req_url = 7;
   map<string, string> req_headers = 8;
   optional string req_body = 9;
+  int64 executed_at = 10;
 }
 
 message Response {

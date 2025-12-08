@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use chrono::DateTime;
 use nanoid::nanoid;
 use sqlx::{Pool, Postgres};
 use tokio::select;
@@ -61,7 +62,7 @@ impl BrokerTrait for Broker {
                     (region = $1 AND scheduled_at <= now() + interval '5 seconds')
                     OR (scheduled_at <= now() - interval '5 seconds')
                   )
-                ORDER BY scheduled_at
+                ORDER BY scheduled_at ASC
                 LIMIT $2
                 FOR UPDATE OF job SKIP LOCKED
               )
@@ -217,15 +218,17 @@ impl BrokerTrait for Broker {
                             }
 
                             let execution_id = format!("execution_{}", nanoid!());
+                            let executed_at = DateTime::from_timestamp_secs(execution.executed_at);
 
                             sqlx::query!(
                                 r#"
                                 INSERT INTO job_executions
                                   (id, executed_at, success, response_id, response_error, request_id)
                                 VALUES
-                                  ($1, now(), $2, $3, $4, $5);
+                                  ($1, $2, $3, $4, $5, $6);
                               "#,
                                 execution_id.clone(),
+                                executed_at,
                                 execution.success,
                                 response_id,
                                 execution.response_error,

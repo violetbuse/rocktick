@@ -155,6 +155,10 @@ async fn run_job(job: JobSpec, state: ExecutorState) {
     tokio::time::sleep(Duration::from_millis(millis_until)).await;
 
     println!("Executing job {}", job.job_id);
+    let executed_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("System time before unix expoch")
+        .as_secs() as i64;
     let response = match public_addr {
         Ok(addr) => {
             send_request_to_ip(
@@ -219,6 +223,7 @@ async fn run_job(job: JobSpec, state: ExecutorState) {
                 req_url: job.url,
                 req_headers: job.headers,
                 req_body: job.body,
+                executed_at,
             }
         }
         Err(error) => JobExecution {
@@ -231,6 +236,7 @@ async fn run_job(job: JobSpec, state: ExecutorState) {
             req_url: job.url,
             req_headers: job.headers,
             req_body: job.body,
+            executed_at,
         },
     };
 
