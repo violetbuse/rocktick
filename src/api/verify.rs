@@ -4,6 +4,7 @@ use axum::{
 };
 use http::StatusCode;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -12,6 +13,9 @@ use crate::api::{ApiError, Context};
 #[derive(Debug, Serialize, ToSchema)]
 struct JobVerification {
     verified: bool,
+    /// The hex digest of the request body, or null
+    /// if there isn't one for the request.
+    hash: Option<String>,
 }
 
 impl IntoResponse for JobVerification {
@@ -20,13 +24,9 @@ impl IntoResponse for JobVerification {
     }
 }
 
-/// Verify job
-///
-/// pass in the value of the 'Rocktick-Job-Id' header and
-/// this method will return whether it actually originated
-/// from us.
 #[utoipa::path(
   get,
+  description = "Verify that a request originates from rocktick.",
   path = "/api/verify/{job_id}",
   params(("job_id", description = "Value of the requests 'Rocktick-Job-Id' header")),
   responses((status = 200, body = JobVerification),
@@ -40,9 +40,13 @@ async fn verify_request(
 ) -> Result<JobVerification, ApiError> {
     let job = sqlx::query!(
         r#"
-    SELECT *
-    FROM scheduled_jobs
-    WHERE id = $1
+    SELECT
+      job.id,
+      req.body
+    FROM scheduled_jobs as job
+    INNER JOIN http_requests as req
+      ON req.id = job.request_id
+    WHERE job.id = $1
       AND lock_nonce IS NOT NULL;"#,
         job_id
     )
@@ -57,12 +61,20 @@ async fn verify_request(
     let job = job.unwrap();
 
     if job.is_none() {
-        return Ok(JobVerification { verified: false });
+        return Ok(JobVerification {
+            verified: false,
+            hash: None,
+        });
     }
 
-    let _job = job.unwrap();
+    let job = job.unwrap();
 
-    Ok(JobVerification { verified: true })
+    let hash = job.body.map(Sha256::digest).map(hex::encode);
+
+    Ok(JobVerification {
+        verified: true,
+        hash,
+    })
 }
 
 pub fn init_router() -> OpenApiRouter<Context> {

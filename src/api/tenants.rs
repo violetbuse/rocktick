@@ -19,7 +19,6 @@ struct CreateTenant {
     max_max_response_bytes: i32,
 }
 
-/// Create tenant
 #[utoipa::path(
   post,
   path = "/api/tenants",
@@ -73,7 +72,6 @@ async fn create_tenant(
     Ok(tenant)
 }
 
-/// Get tenant
 #[utoipa::path(
   get,
   path = "/api/tenants/{tenant_id}",
@@ -136,7 +134,6 @@ struct UpdateTenant {
     max_max_response_bytes: Option<i32>,
 }
 
-/// Update tenant
 #[utoipa::path(
   post,
   path = "/api/tenants/{tenant_id}",

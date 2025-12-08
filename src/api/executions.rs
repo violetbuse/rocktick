@@ -1,7 +1,7 @@
 use axum::extract::{Path, Query, State};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
-use sqlx::{Pool, Postgres};
+use sqlx::{Executor, Postgres};
 use utoipa::IntoParams;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -96,7 +96,6 @@ struct QueryParams {
     cron_id: Option<String>,
 }
 
-/// List executions
 #[utoipa::path(
   get,
   path = "/api/executions",
@@ -181,7 +180,6 @@ async fn list_executions(
     })
 }
 
-/// Get Execution
 #[utoipa::path(
     get,
     path = "/api/executions/{execution_id}",
@@ -250,12 +248,15 @@ async fn get_execution(
     Ok(execution.to_execution())
 }
 
-pub async fn get_executions(
+pub async fn get_executions<'a, E>(
     jobs: Vec<String>,
     tenant_id: Option<String>,
     count_per: i64,
-    pool: &Pool<Postgres>,
-) -> Result<Vec<Execution>, sqlx::Error> {
+    executor: E,
+) -> Result<Vec<Execution>, sqlx::Error>
+where
+    E: Executor<'a, Database = Postgres>,
+{
     let execution = sqlx::query_as!(
         IntermediateExecution,
         r#"
@@ -309,10 +310,10 @@ pub async fn get_executions(
         tenant_id,
         count_per
     )
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
 
-    dbg!(&execution);
+    // dbg!(&execution);
 
     Ok(execution
         .iter()

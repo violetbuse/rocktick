@@ -1,4 +1,4 @@
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
@@ -75,7 +75,6 @@ struct CreateJob {
     max_response_bytes: Option<i32>,
 }
 
-/// Publish Job
 #[utoipa::path(
   post,
   path = "/api/jobs",
@@ -109,6 +108,10 @@ async fn create_job(
     } else {
         None
     };
+
+    if tenant_id.is_some() && tenant.is_none() {
+        return Err(ApiError::bad_request(Some("Invalid tenant id")));
+    }
 
     if let Some(input_timeout) = create_opts.timeout_ms
         && let Some(tenant) = &tenant
@@ -198,7 +201,6 @@ struct QueryParams {
     limit: Option<i64>,
 }
 
-/// List Jobs
 #[utoipa::path(
   get,
   path = "/api/jobs",
@@ -249,11 +251,11 @@ async fn list_jobs(
 
     let job_ids = jobs.iter().map(|j| j.id.clone()).collect();
 
-    dbg!(&job_ids);
+    // dbg!(&job_ids);
 
     let executions = executions::get_executions(job_ids, tenant_id, 5, &ctx.pool).await?;
 
-    dbg!(&executions);
+    // dbg!(&executions);
 
     let jobs: Vec<OneOffJob> = jobs.iter().map(|j| j.to_one_off_job(&executions)).collect();
 
@@ -266,6 +268,262 @@ async fn list_jobs(
     })
 }
 
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+struct UpdateJob {
+    region: Option<String>,
+    execute_at: Option<i64>,
+    request: Option<Request>,
+    timeout_ms: Option<i32>,
+    max_retries: Option<i32>,
+    max_response_bytes: Option<i32>,
+}
+
+#[utoipa::path(
+  post,
+  path = "/api/jobs/{job_id}",
+  params(("job_id", description = "Id of the job")),
+  request_body = UpdateJob,
+  responses(
+    (status = 200, description = "Job updated", body = OneOffJob),
+    (status = "4XX", description = "Job not found", body = ApiError),
+    (status = "5XX", description = "Invalid request", body = ApiError)),
+  tag = "one off jobs"
+)]
+async fn update_job(
+    State(ctx): State<Context>,
+    Path(job_id): Path<String>,
+    TenantId(tenant_id): TenantId,
+    JsonBody(update_opts): JsonBody<UpdateJob>,
+) -> Result<OneOffJob, ApiError> {
+    if let Some(region) = update_opts.region.clone()
+        && !ctx.valid_regions.contains(&region)
+    {
+        return Err(ApiError::bad_request(Some(&format!(
+            "Invalid region: {region}, choose one of the following: {}",
+            ctx.valid_regions.join(", ")
+        ))));
+    }
+
+    let mut txn = ctx.pool.begin().await?;
+    let tenant = if let Some(tenant_id) = tenant_id.clone() {
+        sqlx::query!("SELECT * FROM tenants WHERE id = $1", tenant_id)
+            .fetch_optional(&mut *txn)
+            .await?
+    } else {
+        None
+    };
+
+    if tenant_id.is_some() && tenant.is_none() {
+        return Err(ApiError::bad_request(Some("Invalid tenant id")));
+    }
+
+    if let Some(input_timeout) = update_opts.timeout_ms
+        && let Some(tenant) = &tenant
+        && input_timeout > tenant.max_timeout
+    {
+        return Err(ApiError::bad_request(Some(&format!(
+            "Your timeout of {input_timeout}ms is higher than your limit of {}ms",
+            tenant.max_timeout
+        ))));
+    }
+
+    if let Some(input_max_response_bytes) = update_opts.max_response_bytes
+        && let Some(tenant) = &tenant
+        && input_max_response_bytes > tenant.max_max_response_bytes
+    {
+        return Err(ApiError::bad_request(Some(&format!(
+            "Your max response bytes of {input_max_response_bytes} is higher than your limit of {}",
+            tenant.max_max_response_bytes
+        ))));
+    }
+
+    let existing = sqlx::query!(
+        r#"
+      WITH
+        job AS (
+          SELECT *
+          FROM one_off_jobs
+          WHERE id = $1
+            AND ($2::text IS NULL OR tenant_id = $2)
+          FOR UPDATE
+        ),
+        req AS (
+          SELECT *
+          FROM http_requests
+          WHERE id = (SELECT request_id FROM job)
+          FOR UPDATE
+        )
+      SELECT
+        job.id,
+        job.region,
+        job.execute_at,
+        job.timeout_ms,
+        job.max_retries,
+        job.max_response_bytes,
+        req.id as req_id,
+        req.method,
+        req.url,
+        req.headers,
+        req.body
+      FROM job
+      JOIN req ON req.id = job.request_id
+      "#,
+        job_id.clone(),
+        tenant_id
+    )
+    .fetch_optional(&mut *txn)
+    .await?;
+
+    if existing.is_none() {
+        return Err(ApiError::not_found());
+    }
+
+    let existing_data = existing.unwrap();
+
+    sqlx::query!(
+        r#"DELETE FROM scheduled_jobs WHERE one_off_job_id = $1;"#,
+        job_id.clone()
+    )
+    .execute(&mut *txn)
+    .await?;
+
+    if let Some(updated_request) = update_opts.request.clone() {
+        let headers: Vec<String> = updated_request
+            .headers
+            .iter()
+            .map(|(k, v)| format!("{k}: {v}"))
+            .collect();
+        sqlx::query!(
+            r#"
+        UPDATE http_requests
+        SET
+          method = $1,
+          url = $2,
+          headers = $3,
+          body = $4
+        WHERE id = $5;
+        "#,
+            updated_request.method,
+            updated_request.url,
+            &headers,
+            updated_request.body,
+            existing_data.req_id
+        )
+        .execute(&mut *txn)
+        .await?;
+    }
+
+    let new_region = update_opts.region.unwrap_or(existing_data.region);
+    let new_execute_at = update_opts.execute_at.unwrap_or(existing_data.execute_at);
+    let new_timeout_ms = update_opts.timeout_ms.or(existing_data.timeout_ms);
+    let new_max_retries = update_opts.max_retries.unwrap_or(existing_data.max_retries);
+    let new_max_response_bytes = update_opts
+        .max_response_bytes
+        .or(existing_data.max_response_bytes);
+
+    let new_job = sqlx::query_as!(
+        IntermediateOneOffJob,
+        r#"
+      UPDATE one_off_jobs
+      SET
+        region = $2,
+        execute_at = $3,
+        timeout_ms = $4,
+        max_retries = $5,
+        max_response_bytes = $6
+      FROM one_off_jobs as job
+      JOIN http_requests AS req
+        ON req.id = job.request_id
+      WHERE job.id = $1
+      RETURNING
+        job.id,
+        job.region,
+        job.tenant_id,
+        req.method,
+        req.url,
+        req.headers,
+        req.body,
+        job.execute_at,
+        job.timeout_ms,
+        job.max_retries,
+        job.max_response_bytes,
+        job.created_at
+      "#,
+        job_id.clone(),
+        new_region,
+        new_execute_at,
+        new_timeout_ms,
+        new_max_retries,
+        new_max_response_bytes
+    )
+    .fetch_one(&mut *txn)
+    .await?;
+
+    let executions =
+        executions::get_executions(vec![job_id.clone()], tenant_id, 5, &mut *txn).await?;
+
+    let job = new_job.to_one_off_job(&executions);
+
+    Ok(job)
+}
+
+#[utoipa::path(
+  get,
+  path = "/api/jobs/{job_id}",
+  params(("job_id", description = "Id of the job")),
+  responses(
+    (status = 200, description = "Job found", body = OneOffJob),
+    (status = "4XX", description = "Job not found", body = ApiError),
+    (status = "5XX", description = "Invalid request", body = ApiError)),
+  tag = "one off jobs"
+)]
+async fn get_job(
+    State(ctx): State<Context>,
+    Path(job_id): Path<String>,
+    TenantId(tenant_id): TenantId,
+) -> Result<OneOffJob, ApiError> {
+    let job = sqlx::query_as!(
+        IntermediateOneOffJob,
+        r#"
+    SELECT
+      job.id,
+      job.region,
+      job.tenant_id,
+      req.method,
+      req.url,
+      req.headers,
+      req.body,
+      job.execute_at,
+      job.timeout_ms,
+      job.max_retries,
+      job.max_response_bytes,
+      job.created_at
+    FROM one_off_jobs as job
+    INNER JOIN http_requests as req
+      ON req.id = job.request_id
+    WHERE
+      job.id = $1 AND
+      ($2::text IS NULL OR job.tenant_id = $2);
+    "#,
+        job_id.clone(),
+        tenant_id
+    )
+    .fetch_optional(&ctx.pool)
+    .await?;
+
+    if job.is_none() {
+        return Err(ApiError::not_found());
+    }
+
+    let executions = executions::get_executions(vec![job_id], tenant_id, 5, &ctx.pool).await?;
+
+    let job = job.unwrap().to_one_off_job(&executions);
+
+    Ok(job)
+}
+
 pub fn init_router() -> OpenApiRouter<Context> {
-    OpenApiRouter::new().routes(routes!(create_job, list_jobs))
+    OpenApiRouter::new()
+        .routes(routes!(create_job, list_jobs))
+        .routes(routes!(update_job, get_job))
 }

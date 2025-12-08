@@ -126,6 +126,11 @@ impl From<&str> for ApiError {
 impl From<sqlx::Error> for ApiError {
     fn from(value: sqlx::Error) -> Self {
         eprintln!("Database error: {value:?}");
+
+        if matches!(value, sqlx::Error::RowNotFound) {
+            return ApiError::not_found();
+        }
+
         ApiError::internal_server_error(Some(&value.to_string()))
     }
 }
