@@ -5,7 +5,10 @@ CREATE TABLE tenants (
   max_tokens INTEGER NOT NULL,
   increment INTEGER NOT NULL,
   period INTERVAL NOT NULL,
-  next_increment TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  next_increment TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  max_timeout INTEGER NOT NULL,
+  default_retries INTEGER NOT NULL,
+  max_max_response_bytes INTEGER NOT NULL
 );
 
 CREATE TABLE http_requests (
@@ -29,9 +32,9 @@ CREATE TABLE one_off_jobs (
   tenant_id VARCHAR(255) REFERENCES tenants(id),
   request_id VARCHAR(255) NOT NULL UNIQUE REFERENCES http_requests(id),
   execute_at BIGINT NOT NULL,
-  timeout_ms INTEGER NOT NULL,
+  timeout_ms INTEGER,
   max_retries INTEGER NOT NULL,
-  max_response_bytes INTEGER NOT NULL,
+  max_response_bytes INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -41,9 +44,9 @@ CREATE TABLE cron_jobs (
   tenant_id VARCHAR(255) REFERENCES tenants(id),
   request_id VARCHAR(255) NOT NULL UNIQUE REFERENCES http_requests(id),
   schedule TEXT NOT NULL,
-  timeout_ms INTEGER NOT NULL,
+  timeout_ms INTEGER,
   max_retries INTEGER NOT NULL,
-  max_response_bytes INTEGER NOT NULL,
+  max_response_bytes INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   start_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   error TEXT
@@ -66,13 +69,11 @@ CREATE TABLE scheduled_jobs (
   tenant_id VARCHAR(255) REFERENCES tenants(id),
   one_off_job_id VARCHAR(255) REFERENCES one_off_jobs(id),
   cron_job_id VARCHAR(255) REFERENCES cron_jobs(id),
-  -- Workflows to be implemented later
-  workflow_id VARCHAR(255),
   retry_for_id VARCHAR(255) UNIQUE REFERENCES scheduled_jobs(id),
   scheduled_at TIMESTAMPTZ NOT NULL,
   request_id VARCHAR(255) NOT NULL REFERENCES http_requests(id),
   execution_id VARCHAR(255) UNIQUE REFERENCES job_executions(id),
-  timeout_ms INTEGER NOT NULL,
+  timeout_ms INTEGER,
   max_retries INTEGER NOT NULL,
-  max_response_bytes INTEGER NOT NULL
+  max_response_bytes INTEGER
 );

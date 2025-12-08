@@ -31,7 +31,6 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
     WHERE
       exec.success = false AND
       job.max_retries > 0 AND
-      job.workflow_id IS NULL AND
       pending_retry.id IS NULL
     LIMIT 1 FOR UPDATE OF job SKIP LOCKED
     "#

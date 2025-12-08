@@ -135,6 +135,11 @@ async fn send_request_to_ip(
 }
 
 async fn run_job(job: JobSpec, state: ExecutorState) {
+    // check if the ip address is unallowed
+    let public_addr = resolve_public_ip(&job.url)
+        .await
+        .ok_or("Unable to resolve a public ip address.");
+
     let mut millis_until = 0;
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -150,11 +155,6 @@ async fn run_job(job: JobSpec, state: ExecutorState) {
     tokio::time::sleep(Duration::from_millis(millis_until)).await;
 
     println!("Executing job {}", job.job_id);
-
-    // check if the ip address is unallowed
-    let public_addr = resolve_public_ip(&job.url)
-        .await
-        .ok_or("Unable to resolve a public ip address.");
     let response = match public_addr {
         Ok(addr) => {
             send_request_to_ip(

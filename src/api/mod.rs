@@ -1,5 +1,6 @@
 mod cron;
 mod executions;
+mod models;
 mod publish;
 mod tenants;
 mod verify;
@@ -122,6 +123,13 @@ impl From<&str> for ApiError {
     }
 }
 
+impl From<sqlx::Error> for ApiError {
+    fn from(value: sqlx::Error) -> Self {
+        eprintln!("Database error: {value:?}");
+        ApiError::internal_server_error(Some(&value.to_string()))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ApiError {
     #[serde(skip_serializing)]
@@ -155,6 +163,13 @@ impl ApiError {
         ApiError {
             code: StatusCode::BAD_REQUEST,
             message: message.unwrap_or("Bad request").to_string(),
+        }
+    }
+
+    pub fn tenant_not_allowed() -> Self {
+        ApiError {
+            code: StatusCode::FORBIDDEN,
+            message: "Tenant not allowed".to_string(),
         }
     }
 }

@@ -1,65 +1,14 @@
-use std::collections::HashMap;
-
-use axum::{
-    Json,
-    extract::{Path, Query, State},
-    response::IntoResponse,
-};
+use axum::extract::{Path, Query, State};
 use chrono::{DateTime, Utc};
-use http::StatusCode;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sqlx::{Pool, Postgres};
 use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::api::{ApiError, ApiListResponse, Context, TenantId};
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct Execution {
-    id: String,
-    region: String,
-    scheduled_at: i64,
-    executed_at: Option<i64>,
-    success: Option<bool>,
-    request: Request,
-    response: Option<Response>,
-    response_error: Option<String>,
-    timeout_ms: i32,
-    max_retries: i32,
-    max_response_bytes: i32,
-    tenant_id: Option<String>,
-    one_off_job_id: Option<String>,
-    cron_job_id: Option<String>,
-    workflow_id: Option<String>,
-    retry_for: Option<String>,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct Request {
-    method: String,
-    url: String,
-    headers: HashMap<String, String>,
-    body: Option<String>,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct Response {
-    status: i32,
-    headers: HashMap<String, String>,
-    body: String,
-}
-
-#[derive(Debug, Deserialize, ToSchema, IntoParams)]
-struct QueryParams {
-    cursor: Option<String>,
-    from: Option<i64>,
-    to: Option<i64>,
-    completed: Option<bool>,
-    limit: Option<i64>,
-    one_off_job_id: Option<String>,
-    cron_id: Option<String>,
-    workflow_id: Option<String>,
-}
+use crate::api::{
+    ApiError, ApiListResponse, Context, TenantId,
+    models::{Execution, Request, Response},
+};
 
 struct IntermediateExecution {
     id: String,
@@ -75,13 +24,12 @@ struct IntermediateExecution {
     status: Option<i32>,
     res_headers: Option<Vec<String>>,
     res_body: Option<String>,
-    timeout_ms: i32,
+    timeout_ms: Option<i32>,
     max_retries: i32,
-    max_response_bytes: i32,
+    max_response_bytes: Option<i32>,
     tenant_id: Option<String>,
     one_off_job_id: Option<String>,
     cron_job_id: Option<String>,
-    workflow_id: Option<String>,
     retry_for_id: Option<String>,
 }
 
@@ -131,10 +79,20 @@ impl IntermediateExecution {
             tenant_id: self.tenant_id.clone(),
             one_off_job_id: self.one_off_job_id.clone(),
             cron_job_id: self.cron_job_id.clone(),
-            workflow_id: self.workflow_id.clone(),
             retry_for: self.retry_for_id.clone(),
         }
     }
+}
+
+#[derive(Debug, Deserialize, ToSchema, IntoParams)]
+struct QueryParams {
+    cursor: Option<String>,
+    from: Option<i64>,
+    to: Option<i64>,
+    completed: Option<bool>,
+    limit: Option<i64>,
+    one_off_job_id: Option<String>,
+    cron_id: Option<String>,
 }
 
 /// List executions
@@ -152,7 +110,7 @@ async fn list_executions(
     TenantId(tenant_id): TenantId,
     Query(params): Query<QueryParams>,
 ) -> Result<ApiListResponse<Execution>, ApiError> {
-    let limit = params.limit.unwrap_or(15).min(1000);
+    let limit = params.limit.unwrap_or(15).min(250);
 
     let results = sqlx::query_as!(
         IntermediateExecution,
@@ -177,7 +135,6 @@ async fn list_executions(
         job.tenant_id,
         job.one_off_job_id,
         job.cron_job_id,
-        job.workflow_id,
         job.retry_for_id
       FROM scheduled_jobs as job
       INNER JOIN http_requests as req
@@ -194,7 +151,6 @@ async fn list_executions(
         AND ($6::bigint IS NULL OR job.scheduled_at <= to_timestamp($6))
         AND ($7::text IS NULL OR job.one_off_job_id = $7)
         AND ($8::text IS NULL OR job.cron_job_id = $8)
-        AND ($9::text IS NULL OR job.workflow_id = $9)
       ORDER BY job.id ASC
       LIMIT $1;
       "#,
@@ -206,14 +162,9 @@ async fn list_executions(
         params.to,
         params.one_off_job_id,
         params.cron_id,
-        params.workflow_id,
     )
     .fetch_all(&ctx.pool)
-    .await
-    .map_err(|err| {
-        eprintln!("Error fetching executions: {err:?}");
-        ApiError::internal_server_error(None)
-    })?;
+    .await?;
 
     let executions: Vec<Execution> = results
         .iter()
@@ -227,12 +178,6 @@ async fn list_executions(
         data: executions,
         cursor: last_execution,
     })
-}
-
-impl IntoResponse for Execution {
-    fn into_response(self) -> axum::response::Response {
-        (StatusCode::OK, Json(self)).into_response()
-    }
 }
 
 /// Get Execution
@@ -277,7 +222,6 @@ async fn get_execution(
       job.tenant_id,
       job.one_off_job_id,
       job.cron_job_id,
-      job.workflow_id,
       job.retry_for_id
     FROM scheduled_jobs as job
     INNER JOIN http_requests as req
@@ -294,11 +238,7 @@ async fn get_execution(
         tenant_id
     )
     .fetch_optional(&ctx.pool)
-    .await
-    .map_err(|err| {
-        eprintln!("Error fetching execution {execution_id}: {err:?}");
-        ApiError::internal_server_error(None)
-    })?;
+    .await?;
 
     if execution.is_none() {
         return Err(ApiError::not_found());
@@ -338,7 +278,6 @@ pub async fn get_executions(
     job.tenant_id,
     job.one_off_job_id,
     job.cron_job_id,
-    job.workflow_id,
     job.retry_for_id
   FROM (
     SELECT
@@ -346,8 +285,7 @@ pub async fn get_executions(
       ROW_NUMBER() OVER (PARTITION BY
         tenant_id,
         one_off_job_id,
-        cron_job_id,
-        workflow_id
+        cron_job_id
           ORDER BY
             scheduled_at DESC
         ) AS row_num
@@ -355,8 +293,7 @@ pub async fn get_executions(
     WHERE
       ($1::text[] IS NULL OR
         one_off_job_id = ANY($1) OR
-        cron_job_id = ANY($1) OR
-        workflow_id = ANY($1))
+        cron_job_id = ANY($1))
       AND ($2::text IS NULL OR tenant_id = $2)
   ) job
   INNER JOIN http_requests as req

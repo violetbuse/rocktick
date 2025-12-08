@@ -50,7 +50,7 @@ impl BrokerTrait for Broker {
             let mut stream = sqlx::query!(
                 r#"
               WITH jobs_to_lock AS (
-                SELECT job.id
+                SELECT job.id as id, tenants.id as tenant_id, job.request_id
                 FROM scheduled_jobs as job
                 LEFT JOIN tenants ON
                   job.tenant_id = tenants.id
@@ -65,21 +65,28 @@ impl BrokerTrait for Broker {
                 LIMIT $2
                 FOR UPDATE OF job SKIP LOCKED
               )
-              UPDATE scheduled_jobs j
+              UPDATE scheduled_jobs AS job
               SET lock_nonce = extract(epoch from now())
-              FROM http_requests r, jobs_to_lock t
-              WHERE j.id = t.id
-                AND j.request_id = r.id
+              FROM
+                jobs_to_lock AS to_lock
+              JOIN http_requests AS req
+                ON req.id = to_lock.request_id
+              LEFT JOIN tenants AS tenant
+                ON tenant.id = to_lock.tenant_id
+              WHERE job.id = to_lock.id
+                AND (to_lock.tenant_id IS NULL OR job.tenant_id = to_lock.tenant_id)
               RETURNING
-                j.id as job_id,
-                j.lock_nonce as lock_nonce,
-                j.scheduled_at as scheduled_at,
-                j.timeout_ms as timeout_ms,
-                j.max_response_bytes as max_response_bytes,
-                r.method as method,
-                r.url as url,
-                r.headers as headers,
-                r.body as body;
+                job.id as job_id,
+                job.lock_nonce,
+                job.scheduled_at,
+                job.timeout_ms,
+                job.max_response_bytes,
+                tenant.max_timeout as "max_timeout?",
+                tenant.max_max_response_bytes as "max_max_response_bytes?",
+                req.method,
+                req.url,
+                req.headers,
+                req.body;
               "#,
                 region,
                 2000
@@ -88,6 +95,13 @@ impl BrokerTrait for Broker {
 
             while let Some(next) = stream.next().await {
                 if let Ok(job) = next {
+                    let timeout = job.timeout_ms.or(job.max_timeout).unwrap_or(60_000);
+                    // default 32mb if no tenant limit is set.
+                    let max_response_bytes = job
+                        .max_response_bytes
+                        .or(job.max_max_response_bytes)
+                        .unwrap_or(33554432);
+
                     let job_spec = JobSpec {
                         job_id: job.job_id,
                         lock_nonce: job.lock_nonce.unwrap() as i64,
@@ -105,8 +119,8 @@ impl BrokerTrait for Broker {
                             })
                             .collect(),
                         body: job.body,
-                        timeout_ms: job.timeout_ms,
-                        max_response_bytes: job.max_response_bytes as i64,
+                        timeout_ms: timeout,
+                        max_response_bytes: max_response_bytes as i64,
                     };
 
                     if tx.send(Ok(job_spec)).await.is_err() {

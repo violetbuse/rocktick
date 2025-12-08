@@ -1,38 +1,22 @@
-use axum::{
-    Json,
-    extract::{Path, State},
-    response::IntoResponse,
-};
+use axum::extract::{Path, State};
 use chrono::TimeDelta;
-use http::StatusCode;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sqlx::postgres::types::PgInterval;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
-    api::{ApiError, Context, JsonBody},
+    api::{ApiError, Context, JsonBody, TenantId, models::Tenant},
     id,
 };
-
-#[derive(Serialize, ToSchema)]
-struct Tenant {
-    id: String,
-    tokens: i32,
-    max_tokens: i32,
-    tok_per_day: i32,
-}
-
-impl IntoResponse for Tenant {
-    fn into_response(self) -> axum::response::Response {
-        (StatusCode::OK, Json(self)).into_response()
-    }
-}
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 struct CreateTenant {
     max_tokens: i32,
     tok_per_day: i32,
+    max_timeout: i32,
+    default_retries: i32,
+    max_max_response_bytes: i32,
 }
 
 /// Create tenant
@@ -48,35 +32,42 @@ struct CreateTenant {
 )]
 async fn create_tenant(
     State(ctx): State<Context>,
+    TenantId(tenant_id): TenantId,
     JsonBody(create_opts): JsonBody<CreateTenant>,
 ) -> Result<Tenant, ApiError> {
+    if tenant_id.is_some() {
+        return Err(ApiError::tenant_not_allowed());
+    }
+
     let (period, increment) = compute_incr_and_period(create_opts.tok_per_day)?;
     let new_id = id::generate("tenant");
     let starting_tokens = create_opts.tok_per_day;
     let new_tenant = sqlx::query!(
         r#"
     INSERT INTO tenants
-      (id, tokens, max_tokens, increment, period)
-    VALUES ($1, $2 ,$3, $4, $5) RETURNING *;
+      (id, tokens, max_tokens, increment, period, max_timeout, default_retries, max_max_response_bytes)
+    VALUES ($1, $2 ,$3, $4, $5, $6, $7, $8) RETURNING *;
     "#,
         new_id,
         starting_tokens,
         create_opts.max_tokens,
         increment,
-        period
+        period,
+        create_opts.max_timeout,
+        create_opts.default_retries,
+        create_opts.max_max_response_bytes
     )
     .fetch_one(&ctx.pool)
-    .await
-    .map_err(|err| {
-        eprintln!("Error inserting tenant {err:?}");
-        ApiError::internal_server_error(None)
-    })?;
+    .await?;
 
     let tenant = Tenant {
         id: new_tenant.id,
         tokens: new_tenant.tokens,
         max_tokens: new_tenant.max_tokens,
         tok_per_day: create_opts.tok_per_day,
+        max_timeout: new_tenant.max_timeout,
+        default_retries: new_tenant.default_retries,
+        max_max_response_bytes: new_tenant.max_max_response_bytes,
     };
 
     Ok(tenant)
@@ -94,8 +85,13 @@ async fn create_tenant(
 )]
 async fn get_tenant(
     State(ctx): State<Context>,
+    TenantId(requesting_tenant_id): TenantId,
     Path(tenant_id): Path<String>,
 ) -> Result<Tenant, ApiError> {
+    if requesting_tenant_id.is_some() {
+        return Err(ApiError::tenant_not_allowed());
+    }
+
     let tenant = sqlx::query!(
         r#"
     SELECT *
@@ -105,11 +101,7 @@ async fn get_tenant(
         tenant_id
     )
     .fetch_optional(&ctx.pool)
-    .await
-    .map_err(|err| {
-        eprintln!("Error fetching tenant {err:?}");
-        ApiError::internal_server_error(None)
-    })?;
+    .await?;
 
     if tenant.is_none() {
         return Err(ApiError::not_found());
@@ -126,6 +118,9 @@ async fn get_tenant(
         tokens: tenant.tokens,
         max_tokens: tenant.max_tokens,
         tok_per_day: tok_per_day as i32,
+        max_timeout: tenant.max_timeout,
+        default_retries: tenant.default_retries,
+        max_max_response_bytes: tenant.max_max_response_bytes,
     };
 
     Ok(res)
@@ -136,6 +131,9 @@ struct UpdateTenant {
     tokens: Option<i32>,
     max_tokens: Option<i32>,
     tok_per_day: Option<i32>,
+    max_timeout: Option<i32>,
+    default_retries: Option<i32>,
+    max_max_response_bytes: Option<i32>,
 }
 
 /// Update tenant
@@ -153,8 +151,13 @@ struct UpdateTenant {
 async fn update_tenant(
     State(ctx): State<Context>,
     Path(tenant_id): Path<String>,
+    TenantId(requesting_tenant_id): TenantId,
     JsonBody(update_opts): JsonBody<UpdateTenant>,
 ) -> Result<Tenant, ApiError> {
+    if requesting_tenant_id.is_some() {
+        return Err(ApiError::tenant_not_allowed());
+    }
+
     let (period, increment) = if let Some(tok_per_day) = update_opts.tok_per_day {
         Some(compute_incr_and_period(tok_per_day)?)
     } else {
@@ -169,21 +172,23 @@ async fn update_tenant(
         tokens = COALESCE($1, tokens),
         max_tokens = COALESCE($2, max_tokens),
         period = COALESCE($3, period),
-        increment = COALESCE($4, increment)
-      WHERE id = $5 RETURNING *
+        increment = COALESCE($4, increment),
+        max_timeout = COALESCE($5, max_timeout),
+        default_retries = COALESCE($6, default_retries),
+        max_max_response_bytes = COALESCE($7, max_max_response_bytes)
+      WHERE id = $8 RETURNING *
       "#,
         update_opts.tokens,
         update_opts.max_tokens,
         period,
         increment,
+        update_opts.max_timeout,
+        update_opts.default_retries,
+        update_opts.max_max_response_bytes,
         tenant_id
     )
     .fetch_optional(&ctx.pool)
-    .await
-    .map_err(|err| {
-        eprintln!("Error updating tenant {tenant_id}: {err:?}");
-        ApiError::internal_server_error(None)
-    })?;
+    .await?;
 
     if new_tenant.is_none() {
         return Err(ApiError::not_found());
@@ -200,6 +205,9 @@ async fn update_tenant(
         tokens: tenant.tokens,
         max_tokens: tenant.max_tokens,
         tok_per_day: tok_per_day as i32,
+        max_timeout: tenant.max_timeout,
+        default_retries: tenant.default_retries,
+        max_max_response_bytes: tenant.max_max_response_bytes,
     };
 
     Ok(res)
