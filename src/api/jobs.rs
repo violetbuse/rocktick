@@ -1,15 +1,69 @@
-use axum::extract::State;
+use axum::extract::{Query, State};
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
     api::{
-        ApiError, Context, JsonBody, TenantId,
-        models::{OneOffJob, Request},
+        ApiError, ApiListResponse, Context, JsonBody, TenantId, executions,
+        models::{Execution, OneOffJob, Request},
     },
     id,
 };
+
+struct IntermediateOneOffJob {
+    id: String,
+    region: String,
+    tenant_id: Option<String>,
+    method: String,
+    url: String,
+    headers: Vec<String>,
+    body: Option<String>,
+    execute_at: i64,
+    timeout_ms: Option<i32>,
+    max_retries: i32,
+    max_response_bytes: Option<i32>,
+    created_at: DateTime<Utc>,
+}
+
+impl IntermediateOneOffJob {
+    pub fn to_one_off_job(&self, executions: &[Execution]) -> OneOffJob {
+        let mut executions: Vec<Execution> = executions
+            .iter()
+            .filter(|exec| exec.one_off_job_id == Some(self.id.clone()))
+            .cloned()
+            .collect();
+
+        executions.sort_by(|a, b| a.scheduled_at.cmp(&b.scheduled_at).reverse());
+
+        OneOffJob {
+            id: self.id.clone(),
+            region: self.region.clone(),
+            execute_at: self.execute_at,
+            request: Request {
+                method: self.method.clone(),
+                url: self.url.clone(),
+                headers: self
+                    .headers
+                    .iter()
+                    .filter_map(|entry| {
+                        let mut parts = entry.splitn(2, ":");
+                        let key = parts.next()?.trim().to_string();
+                        let value = parts.next()?.trim().to_string();
+                        Some((key, value))
+                    })
+                    .collect(),
+                body: self.body.clone(),
+            },
+            executions,
+            timeout_ms: self.timeout_ms,
+            max_retries: self.max_retries,
+            max_response_bytes: self.max_response_bytes,
+            tenant_id: self.tenant_id.clone(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 struct CreateJob {
@@ -138,6 +192,80 @@ async fn create_job(
     Ok(job)
 }
 
+#[derive(Debug, Deserialize, IntoParams)]
+struct QueryParams {
+    cursor: Option<String>,
+    limit: Option<i64>,
+}
+
+/// List Jobs
+#[utoipa::path(
+  get,
+  path = "/api/jobs",
+  params(QueryParams),
+  responses((status = 200, body = ApiListResponse<OneOffJob>),
+    (status = "4XX", body = ApiError),
+    (status = "5XX", body = ApiError)),
+  tag = "one off jobs"
+)]
+async fn list_jobs(
+    State(ctx): State<Context>,
+    TenantId(tenant_id): TenantId,
+    Query(params): Query<QueryParams>,
+) -> Result<ApiListResponse<OneOffJob>, ApiError> {
+    let limit = params.limit.unwrap_or(15).min(250);
+
+    let jobs = sqlx::query_as!(
+        IntermediateOneOffJob,
+        r#"
+      SELECT
+        job.id,
+        job.region,
+        job.tenant_id,
+        req.method,
+        req.url,
+        req.headers,
+        req.body,
+        job.execute_at,
+        job.timeout_ms,
+        job.max_retries,
+        job.max_response_bytes,
+        job.created_at
+      FROM one_off_jobs as job
+      INNER JOIN http_requests as req
+        ON req.id = job.request_id
+      WHERE
+        ($2::text IS NULL OR job.tenant_id = $2)
+        AND ($3::text IS NULL OR job.id > $3)
+      ORDER BY job.id DESC
+      LIMIT $1;
+      "#,
+        limit,
+        tenant_id.clone(),
+        params.cursor
+    )
+    .fetch_all(&ctx.pool)
+    .await?;
+
+    let job_ids = jobs.iter().map(|j| j.id.clone()).collect();
+
+    dbg!(&job_ids);
+
+    let executions = executions::get_executions(job_ids, tenant_id, 5, &ctx.pool).await?;
+
+    dbg!(&executions);
+
+    let jobs: Vec<OneOffJob> = jobs.iter().map(|j| j.to_one_off_job(&executions)).collect();
+
+    let last_job = jobs.last().map(|j| j.id.clone());
+
+    Ok(ApiListResponse {
+        count: jobs.len(),
+        data: jobs,
+        cursor: last_job,
+    })
+}
+
 pub fn init_router() -> OpenApiRouter<Context> {
-    OpenApiRouter::new().routes(routes!(create_job))
+    OpenApiRouter::new().routes(routes!(create_job, list_jobs))
 }

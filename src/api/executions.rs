@@ -2,7 +2,7 @@ use axum::extract::{Path, Query, State};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use sqlx::{Pool, Postgres};
-use utoipa::{IntoParams, ToSchema};
+use utoipa::IntoParams;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::api::{
@@ -10,6 +10,7 @@ use crate::api::{
     models::{Execution, Request, Response},
 };
 
+#[derive(Debug)]
 struct IntermediateExecution {
     id: String,
     region: String,
@@ -84,7 +85,7 @@ impl IntermediateExecution {
     }
 }
 
-#[derive(Debug, Deserialize, ToSchema, IntoParams)]
+#[derive(Debug, Deserialize, IntoParams)]
 struct QueryParams {
     cursor: Option<String>,
     from: Option<i64>,
@@ -151,7 +152,7 @@ async fn list_executions(
         AND ($6::bigint IS NULL OR job.scheduled_at <= to_timestamp($6))
         AND ($7::text IS NULL OR job.one_off_job_id = $7)
         AND ($8::text IS NULL OR job.cron_job_id = $8)
-      ORDER BY job.id ASC
+      ORDER BY job.id DESC
       LIMIT $1;
       "#,
         limit,
@@ -291,9 +292,8 @@ pub async fn get_executions(
         ) AS row_num
     FROM scheduled_jobs
     WHERE
-      ($1::text[] IS NULL OR
-        one_off_job_id = ANY($1) OR
-        cron_job_id = ANY($1))
+      (one_off_job_id = ANY($1)
+      OR cron_job_id = ANY($1))
       AND ($2::text IS NULL OR tenant_id = $2)
   ) job
   INNER JOIN http_requests as req
@@ -309,8 +309,10 @@ pub async fn get_executions(
         tenant_id,
         count_per
     )
-    .fetch_optional(pool)
+    .fetch_all(pool)
     .await?;
+
+    dbg!(&execution);
 
     Ok(execution
         .iter()

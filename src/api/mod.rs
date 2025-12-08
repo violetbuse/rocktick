@@ -1,7 +1,7 @@
 mod cron;
 mod executions;
+mod jobs;
 mod models;
-mod publish;
 mod tenants;
 mod verify;
 
@@ -247,7 +247,7 @@ pub async fn start(config: Config) -> anyhow::Result<()> {
 fn init_router() -> OpenApiRouter<Context> {
     OpenApiRouter::new()
         .merge(tenants::init_router())
-        .merge(publish::init_router())
+        .merge(jobs::init_router())
         .merge(cron::init_router())
         .merge(verify::init_router())
         .merge(executions::init_router())
