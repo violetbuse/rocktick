@@ -1,9 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use axum::{Json, response::IntoResponse};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+
+use crate::api::ApiError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct OneOffJob {
@@ -55,6 +57,30 @@ pub struct Request {
     pub url: String,
     pub headers: HashMap<String, String>,
     pub body: Option<String>,
+}
+
+impl Request {
+    pub fn verify(&self) -> Result<(), ApiError> {
+        let method = http::Method::from_str(&self.method);
+
+        if method.is_err() {
+            return Err(ApiError::bad_request(Some(&format!(
+                "{} is not a valid http method.",
+                self.method
+            ))));
+        }
+
+        let url = url::Url::parse(&self.url);
+
+        if let Err(error) = url {
+            return Err(ApiError::bad_request(Some(&format!(
+                "{} is not a valid url: {error}",
+                self.url,
+            ))));
+        };
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

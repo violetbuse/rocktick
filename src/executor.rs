@@ -126,10 +126,13 @@ async fn send_request_to_ip(
         req = req.body(body);
     }
 
-    let response = req
-        .send()
-        .await
-        .map_err(|err| format!("Error sending request {err:?}"))?;
+    let response = req.send().await.map_err(|err| {
+        if err.is_timeout() {
+            return format!("Request timed out: {err:?}");
+        }
+
+        format!("Error sending request {err:?}")
+    })?;
 
     Ok(response)
 }

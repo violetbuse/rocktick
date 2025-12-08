@@ -100,6 +100,8 @@ async fn create_job(
         ))));
     }
 
+    create_opts.request.verify()?;
+
     let mut txn = ctx.pool.begin().await?;
     let tenant = if let Some(tenant_id) = tenant_id.clone() {
         sqlx::query!("SELECT * FROM tenants WHERE id = $1", tenant_id)
@@ -388,6 +390,8 @@ async fn update_job(
     .await?;
 
     if let Some(updated_request) = update_opts.request.clone() {
+        updated_request.verify()?;
+
         let headers: Vec<String> = updated_request
             .headers
             .iter()
