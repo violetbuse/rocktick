@@ -61,6 +61,13 @@ pub struct Request {
 
 impl Request {
     pub fn verify(&self) -> Result<(), ApiError> {
+        if self.method.len() > 10 {
+            return Err(ApiError::bad_request(Some(&format!(
+                "{} is not a valid http method (max-length: 10). Do you really need a custom http method?",
+                self.method
+            ))));
+        }
+
         let method = http::Method::from_str(&self.method);
 
         if method.is_err() {
