@@ -383,7 +383,7 @@ async fn update_job(
     let existing_data = existing.unwrap();
 
     sqlx::query!(
-        r#"DELETE FROM scheduled_jobs WHERE one_off_job_id = $1;"#,
+        r#"DELETE FROM scheduled_jobs WHERE one_off_job_id = $1 AND execution_id IS NULL;"#,
         job_id.clone()
     )
     .execute(&mut *txn)

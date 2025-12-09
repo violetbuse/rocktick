@@ -8,6 +8,25 @@ use utoipa::ToSchema;
 use crate::api::ApiError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CronJob {
+    pub id: String,
+    pub region: String,
+    pub schedule: String,
+    pub request: Request,
+    pub executions: Vec<Execution>,
+    pub timeout_ms: Option<i32>,
+    pub max_retries: i32,
+    pub max_response_bytes: Option<i32>,
+    pub tenant_id: Option<String>,
+}
+
+impl IntoResponse for CronJob {
+    fn into_response(self) -> axum::response::Response {
+        (StatusCode::OK, Json(self)).into_response()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct OneOffJob {
     pub id: String,
     pub region: String,
