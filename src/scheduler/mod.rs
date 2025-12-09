@@ -3,10 +3,9 @@ mod one_off;
 mod retries;
 mod tenants;
 
-use std::{collections::HashMap, process::Output, sync::Arc, time::Duration};
+use std::time::Duration;
 
-use futures::{FutureExt, stream::FuturesUnordered};
-use maplit::hashmap;
+use futures::stream::FuturesUnordered;
 use sqlx::{Pool, Postgres};
 use tokio::select;
 use tokio_stream::StreamExt;
