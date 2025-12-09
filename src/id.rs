@@ -1,11 +1,9 @@
 use std::{
-    sync::{
-        Mutex,
-        // atomic::{AtomicU64, Ordering},
-    },
+    sync::Mutex,
     // time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use chrono::{DateTime, Utc};
 use once_cell::sync::Lazy;
 // use rand::Rng;
 // use ulid::Ulid;
@@ -80,6 +78,12 @@ pub fn generate(prefix: &str) -> String {
     let id = generator
         .generate()
         .expect("Failed to generate non-overflowing ulid somehow.");
+
+    format!("{prefix}_{}", id)
+}
+
+pub fn gen_for_time(prefix: &str, datetime: DateTime<Utc>) -> String {
+    let id = ulid::Ulid::from_datetime(datetime.into());
 
     format!("{prefix}_{}", id)
 }

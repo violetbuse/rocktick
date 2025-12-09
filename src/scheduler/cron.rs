@@ -115,7 +115,7 @@ async fn schedule_cron_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> any
     }
 
     for scheduled_time in times {
-        let new_job_id = id::generate("scheduled");
+        let new_job_id = id::gen_for_time("scheduled", scheduled_time);
 
         let mut hasher = DefaultHasher::new();
         new_job_id.hash(&mut hasher);

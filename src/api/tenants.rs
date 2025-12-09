@@ -17,6 +17,7 @@ struct CreateTenant {
     max_timeout: i32,
     default_retries: i32,
     max_max_response_bytes: i32,
+    max_request_bytes: i32,
 }
 
 #[utoipa::path(
@@ -44,8 +45,8 @@ async fn create_tenant(
     let new_tenant = sqlx::query!(
         r#"
     INSERT INTO tenants
-      (id, tokens, max_tokens, increment, period, max_timeout, default_retries, max_max_response_bytes)
-    VALUES ($1, $2 ,$3, $4, $5, $6, $7, $8) RETURNING *;
+      (id, tokens, max_tokens, increment, period, max_timeout, default_retries, max_max_response_bytes, max_request_bytes)
+    VALUES ($1, $2 ,$3, $4, $5, $6, $7, $8, $9) RETURNING *;
     "#,
         new_id,
         starting_tokens,
@@ -54,7 +55,8 @@ async fn create_tenant(
         period,
         create_opts.max_timeout,
         create_opts.default_retries,
-        create_opts.max_max_response_bytes
+        create_opts.max_max_response_bytes,
+        create_opts.max_request_bytes
     )
     .fetch_one(&ctx.pool)
     .await?;
@@ -67,6 +69,7 @@ async fn create_tenant(
         max_timeout: new_tenant.max_timeout,
         default_retries: new_tenant.default_retries,
         max_max_response_bytes: new_tenant.max_max_response_bytes,
+        max_request_bytes: new_tenant.max_request_bytes,
     };
 
     Ok(tenant)
@@ -121,6 +124,7 @@ async fn get_tenant(
         max_timeout: tenant.max_timeout,
         default_retries: tenant.default_retries,
         max_max_response_bytes: tenant.max_max_response_bytes,
+        max_request_bytes: tenant.max_request_bytes,
     };
 
     Ok(res)
@@ -134,6 +138,7 @@ struct UpdateTenant {
     max_timeout: Option<i32>,
     default_retries: Option<i32>,
     max_max_response_bytes: Option<i32>,
+    max_request_bytes: Option<i32>,
 }
 
 #[utoipa::path(
@@ -174,8 +179,9 @@ async fn update_tenant(
         increment = COALESCE($4, increment),
         max_timeout = COALESCE($5, max_timeout),
         default_retries = COALESCE($6, default_retries),
-        max_max_response_bytes = COALESCE($7, max_max_response_bytes)
-      WHERE id = $8 RETURNING *
+        max_max_response_bytes = COALESCE($7, max_max_response_bytes),
+        max_request_bytes = COALESCE($8, max_request_bytes)
+      WHERE id = $9 RETURNING *
       "#,
         update_opts.tokens,
         update_opts.max_tokens,
@@ -184,6 +190,7 @@ async fn update_tenant(
         update_opts.max_timeout,
         update_opts.default_retries,
         update_opts.max_max_response_bytes,
+        update_opts.max_request_bytes,
         tenant_id
     )
     .fetch_optional(&ctx.pool)
@@ -207,6 +214,7 @@ async fn update_tenant(
         max_timeout: tenant.max_timeout,
         default_retries: tenant.default_retries,
         max_max_response_bytes: tenant.max_max_response_bytes,
+        max_request_bytes: tenant.max_request_bytes,
     };
 
     Ok(res)

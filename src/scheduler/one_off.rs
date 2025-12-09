@@ -42,9 +42,10 @@ async fn schedule_one_off_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> 
 
     println!("Scheduling {}", to_schedule.id);
 
-    let scheduled_time = DateTime::from_timestamp_secs(to_schedule.execute_at);
+    let scheduled_time = DateTime::from_timestamp_secs(to_schedule.execute_at)
+        .expect("Failed to create DateTime from one off job timestamp.");
 
-    let new_job_id = id::generate("scheduled");
+    let new_job_id = id::gen_for_time("scheduled", scheduled_time);
 
     let mut hasher = DefaultHasher::new();
     new_job_id.hash(&mut hasher);

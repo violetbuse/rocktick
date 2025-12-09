@@ -84,7 +84,7 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
     let wait_time = base_delay_ms * (2 ^ attempts_made as u64);
     let next_time = to_retry.executed_at + Duration::from_millis(wait_time);
 
-    let new_job_id = id::generate("scheduled");
+    let new_job_id = id::gen_for_time("scheduled", next_time);
 
     let mut hasher = DefaultHasher::new();
     new_job_id.hash(&mut hasher);

@@ -135,6 +135,17 @@ async fn create_job(
         ))));
     }
 
+    if let Some(body_text) = &create_opts.request.body
+        && let Some(tenant) = &tenant
+        && body_text.len() as i32 > tenant.max_request_bytes
+    {
+        return Err(ApiError::bad_request(Some(&format!(
+            "Your request body of {} bytes is higher than your limit of {}",
+            body_text.len(),
+            tenant.max_request_bytes
+        ))));
+    }
+
     let request_id = id::generate("request");
 
     let headers: Vec<String> = create_opts
@@ -336,6 +347,17 @@ async fn update_job(
         return Err(ApiError::bad_request(Some(&format!(
             "Your max response bytes of {input_max_response_bytes} is higher than your limit of {}",
             tenant.max_max_response_bytes
+        ))));
+    }
+
+    if let Some(body_text) = update_opts.request.as_ref().and_then(|r| r.body.clone())
+        && let Some(tenant) = &tenant
+        && body_text.len() as i32 > tenant.max_request_bytes
+    {
+        return Err(ApiError::bad_request(Some(&format!(
+            "Your request body of {} bytes is higher than your limit of {}",
+            body_text.len(),
+            tenant.max_request_bytes
         ))));
     }
 
