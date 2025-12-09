@@ -240,7 +240,7 @@ async fn list_jobs(
         ON req.id = job.request_id
       WHERE
         ($2::text IS NULL OR job.tenant_id = $2)
-        AND ($3::text IS NULL OR job.id > $3)
+        AND ($3::text IS NULL OR job.id < $3)
       ORDER BY job.id DESC
       LIMIT $1;
       "#,
