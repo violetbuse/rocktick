@@ -70,7 +70,7 @@ impl IntermediateCronJob {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 struct CreateCronJob {
-    region: String,
+    region: Option<String>,
     schedule: String,
     request: Request,
     timeout_ms: Option<i32>,
@@ -94,12 +94,17 @@ async fn create_cron_job(
     TenantId(tenant_id): TenantId,
     JsonBody(create_opts): JsonBody<CreateCronJob>,
 ) -> Result<CronJob, ApiError> {
-    if !ctx.valid_regions.contains(&create_opts.region) {
+    let region = create_opts
+        .region
+        .or(ctx.valid_regions.first().cloned())
+        .expect("There are no valid regions.");
+
+    if !ctx.valid_regions.contains(&region) {
         let region_list = ctx.valid_regions.join(", ");
 
         return Err(ApiError::bad_request(Some(&format!(
             "Invalid region: {}, choose one of the following: {}",
-            create_opts.region, region_list
+            region, region_list
         ))));
     }
 
@@ -190,7 +195,7 @@ async fn create_cron_job(
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       "#,
         job_id,
-        create_opts.region.clone(),
+        region,
         tenant_id,
         request_id,
         create_opts.schedule,
@@ -205,7 +210,7 @@ async fn create_cron_job(
 
     let job = CronJob {
         id: job_id,
-        region: create_opts.region.clone(),
+        region,
         schedule: create_opts.schedule,
         request: create_opts.request,
         executions: Vec::new(),

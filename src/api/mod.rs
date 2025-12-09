@@ -221,6 +221,10 @@ where
 pub async fn start(config: Config) -> anyhow::Result<()> {
     println!("Valid Regions: {:?}", &config.valid_regions);
 
+    if config.valid_regions.is_empty() {
+        return Err(anyhow::anyhow!("No valid regions provided"));
+    }
+
     let context = Context {
         pool: config.pool,
         valid_regions: config.valid_regions,
