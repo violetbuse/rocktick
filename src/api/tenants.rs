@@ -86,7 +86,9 @@ async fn get_tenant(
     TenantId(requesting_tenant_id): TenantId,
     Path(tenant_id): Path<String>,
 ) -> Result<Tenant, ApiError> {
-    if requesting_tenant_id.is_some() {
+    if let Some(requesting_tenant_id) = requesting_tenant_id
+        && requesting_tenant_id != tenant_id
+    {
         return Err(ApiError::tenant_not_allowed());
     }
 
