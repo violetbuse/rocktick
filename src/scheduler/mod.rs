@@ -21,20 +21,20 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Config {
     pool: Pool<Postgres>,
-    cron_schedulers: usize,
-    tenant_schedulers: usize,
-    one_off_schedulers: usize,
-    retry_schedulers: usize,
+    cron_count: usize,
+    tenant_count: usize,
+    one_off_count: usize,
+    retry_count: usize,
 }
 
 impl Config {
     pub async fn from_cli(options: SchedulerOptions, pool: Pool<Postgres>) -> Self {
         Self {
             pool,
-            cron_schedulers: options.cron_schedulers,
-            tenant_schedulers: options.tenant_schedulers,
-            one_off_schedulers: options.one_off_schedulers,
-            retry_schedulers: options.retry_schedulers,
+            cron_count: options.cron_schedulers,
+            tenant_count: options.tenant_schedulers,
+            one_off_count: options.one_off_schedulers,
+            retry_count: options.retry_schedulers,
         }
     }
 }
@@ -76,11 +76,10 @@ async fn run_multiple<S: Scheduler>(pool: &Pool<Postgres>, count: usize) -> anyh
 }
 
 pub async fn start(config: Config) -> anyhow::Result<()> {
-    let one_off_jobs_sched =
-        run_multiple::<OneOffScheduler>(&config.pool, config.one_off_schedulers);
-    let cron_jobs_sched = run_multiple::<CronScheduler>(&config.pool, config.cron_schedulers);
-    let retry_jobs_sched = run_multiple::<RetryScheduler>(&config.pool, config.retry_schedulers);
-    let tenant_jobs_sched = run_multiple::<TenantScheduler>(&config.pool, config.tenant_schedulers);
+    let one_off_jobs_sched = run_multiple::<OneOffScheduler>(&config.pool, config.one_off_count);
+    let cron_jobs_sched = run_multiple::<CronScheduler>(&config.pool, config.cron_count);
+    let retry_jobs_sched = run_multiple::<RetryScheduler>(&config.pool, config.retry_count);
+    let tenant_jobs_sched = run_multiple::<TenantScheduler>(&config.pool, config.tenant_count);
 
     select! {
       res = one_off_jobs_sched => res?,
