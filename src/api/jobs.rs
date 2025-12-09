@@ -271,7 +271,7 @@ async fn list_jobs(
 
     // dbg!(&job_ids);
 
-    let executions = executions::get_executions(job_ids, tenant_id, 5, &ctx.pool).await?;
+    let executions = executions::get_executions(job_ids, tenant_id, 3, &ctx.pool).await?;
 
     // dbg!(&executions);
 
@@ -546,7 +546,7 @@ async fn get_job(
         return Err(ApiError::not_found());
     }
 
-    let executions = executions::get_executions(vec![job_id], tenant_id, 5, &ctx.pool).await?;
+    let executions = executions::get_executions(vec![job_id], tenant_id, 7, &ctx.pool).await?;
 
     let job = job.unwrap().to_one_off_job(&executions);
 

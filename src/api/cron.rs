@@ -280,7 +280,7 @@ async fn list_cron_jobs(
 
     let job_ids: Vec<String> = jobs.iter().map(|j| j.id.clone()).collect();
 
-    let executions = executions::get_executions(job_ids, tenant_id, 5, &ctx.pool).await?;
+    let executions = executions::get_executions(job_ids, tenant_id, 3, &ctx.pool).await?;
 
     let jobs: Vec<CronJob> = jobs.iter().map(|j| j.to_cron_job(&executions)).collect();
 
@@ -548,7 +548,7 @@ async fn get_cron_job(
         return Err(ApiError::not_found());
     }
 
-    let executions = executions::get_executions(vec![job_id], tenant_id, 5, &ctx.pool).await?;
+    let executions = executions::get_executions(vec![job_id], tenant_id, 7, &ctx.pool).await?;
 
     let job = job.unwrap().to_cron_job(&executions);
 
