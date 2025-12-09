@@ -145,8 +145,10 @@ async fn list_executions(
         ON exe.response_id = res.id
       WHERE
         ($2::text IS NULL OR job.tenant_id = $2)
-        AND ($3::bool IS NULL OR exe.id IS NULL != $3)
-        AND ($4::text IS NULL OR job.id > $4)
+        AND ($3::bool IS NULL OR
+          ($3 = true AND exe.id IS NOT NULL) OR
+          ($3 = false AND exe.id IS NULL))
+        AND ($4::text IS NULL OR job.id < $4)
         AND ($5::bigint IS NULL OR job.scheduled_at >= to_timestamp($5))
         AND ($6::bigint IS NULL OR job.scheduled_at <= to_timestamp($6))
         AND ($7::text IS NULL OR job.one_off_job_id = $7)
