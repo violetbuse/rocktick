@@ -1,16 +1,20 @@
-use std::{cmp::max, time::Duration};
+use std::cmp::max;
 
 use chrono::{TimeDelta, Utc};
 use sqlx::{Pool, Postgres};
 
-async fn schedule_tenant_token_increase(
-    pool: &Pool<Postgres>,
-    reached_end: &mut bool,
-) -> anyhow::Result<()> {
-    let mut tx = pool.begin().await?;
+use crate::scheduler::Scheduler;
 
-    let tenant_to_increase = sqlx::query!(
-        r#"
+#[derive(Clone, Copy)]
+pub struct TenantScheduler;
+
+#[async_trait::async_trait]
+impl Scheduler for TenantScheduler {
+    async fn run_once(pool: &Pool<Postgres>, reached_end: &mut bool) -> anyhow::Result<()> {
+        let mut tx = pool.begin().await?;
+
+        let tenant_to_increase = sqlx::query!(
+            r#"
       SELECT *
       FROM tenants
       WHERE
@@ -18,57 +22,47 @@ async fn schedule_tenant_token_increase(
         tokens < max_tokens
       LIMIT 1 FOR UPDATE SKIP LOCKED;
       "#
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
 
-    if tenant_to_increase.is_none() {
-        *reached_end = true;
-        return Ok(());
-    }
+        if tenant_to_increase.is_none() {
+            *reached_end = true;
+            return Ok(());
+        }
 
-    let tenant = tenant_to_increase.unwrap();
+        let tenant = tenant_to_increase.unwrap();
 
-    let new_tokens = (tenant.tokens + tenant.increment).min(tenant.max_tokens);
-    let period = tenant.period;
+        let new_tokens = (tenant.tokens + tenant.increment).min(tenant.max_tokens);
+        let period = tenant.period;
 
-    let period_time_delta =
-        TimeDelta::days(period.days as i64) + TimeDelta::microseconds(period.microseconds);
+        let period_time_delta =
+            TimeDelta::days(period.days as i64) + TimeDelta::microseconds(period.microseconds);
 
-    let time_since_scheduled_increment = Utc::now() - tenant.next_increment;
-    let next_time = if new_tokens == tenant.max_tokens {
-        Utc::now() + max(TimeDelta::minutes(5), period_time_delta)
-    } else if time_since_scheduled_increment > TimeDelta::minutes(5) {
-        Utc::now() + period_time_delta
-    } else {
-        tenant.next_increment + period_time_delta
-    };
+        let time_since_scheduled_increment = Utc::now() - tenant.next_increment;
+        let next_time = if new_tokens == tenant.max_tokens {
+            Utc::now() + max(TimeDelta::minutes(5), period_time_delta)
+        } else if time_since_scheduled_increment > TimeDelta::minutes(5) {
+            Utc::now() + period_time_delta
+        } else {
+            tenant.next_increment + period_time_delta
+        };
 
-    sqlx::query!(
-        r#"
+        sqlx::query!(
+            r#"
       UPDATE tenants
       SET tokens = $2, next_increment = $3
       WHERE id = $1;
       "#,
-        tenant.id,
-        new_tokens,
-        next_time
-    )
-    .execute(&mut *tx)
-    .await?;
+            tenant.id,
+            new_tokens,
+            next_time
+        )
+        .execute(&mut *tx)
+        .await?;
 
-    tx.commit().await?;
+        tx.commit().await?;
 
-    Ok(())
-}
-
-pub async fn scheduling_loop(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let mut reached_end = false;
-    loop {
-        schedule_tenant_token_increase(&pool, &mut reached_end).await?;
-        if reached_end {
-            reached_end = false;
-            tokio::time::sleep(Duration::from_secs(3)).await;
-        }
+        Ok(())
     }
 }

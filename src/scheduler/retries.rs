@@ -5,13 +5,18 @@ use std::{
 
 use sqlx::{Pool, Postgres};
 
-use crate::id;
+use crate::{id, scheduler::Scheduler};
 
-async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> anyhow::Result<()> {
-    let mut tx = pool.begin().await?;
+#[derive(Clone, Copy)]
+pub struct RetryScheduler;
 
-    let failed_scheduled_job = sqlx::query!(
-        r#"
+#[async_trait::async_trait]
+impl Scheduler for RetryScheduler {
+    async fn run_once(pool: &Pool<Postgres>, reached_end: &mut bool) -> anyhow::Result<()> {
+        let mut tx = pool.begin().await?;
+
+        let failed_scheduled_job = sqlx::query!(
+            r#"
     SELECT
       job.id as id,
       job.region as region,
@@ -34,21 +39,21 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
       pending_retry.id IS NULL
     LIMIT 1 FOR UPDATE OF job SKIP LOCKED
     "#
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
 
-    if failed_scheduled_job.is_none() {
-        *reached_end = true;
-        return Ok(());
-    }
+        if failed_scheduled_job.is_none() {
+            *reached_end = true;
+            return Ok(());
+        }
 
-    let to_retry = failed_scheduled_job.unwrap();
+        let to_retry = failed_scheduled_job.unwrap();
 
-    println!("Scheduling retry for {}", to_retry.id);
+        println!("Scheduling retry for {}", to_retry.id);
 
-    let retry_query = sqlx::query!(
-        r#"
+        let retry_query = sqlx::query!(
+            r#"
       WITH RECURSIVE retry_chain AS (
         SELECT
           id,
@@ -72,28 +77,28 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
       SELECT COALESCE(MAX(attempts_made), 0) as attempts
       FROM retry_chain;
       "#,
-        to_retry.id
-    )
-    .fetch_one(&mut *tx)
-    .await?;
+            to_retry.id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
 
-    let attempts_made = retry_query.attempts.unwrap();
-    let attempts_remaining = to_retry.max_retries - 1;
+        let attempts_made = retry_query.attempts.unwrap();
+        let attempts_remaining = to_retry.max_retries - 1;
 
-    let base_delay_ms = 60 * 1000;
-    let wait_time = base_delay_ms * (2 ^ attempts_made as u64);
-    let next_time = to_retry.executed_at + Duration::from_millis(wait_time);
+        let base_delay_ms = 60 * 1000;
+        let wait_time = base_delay_ms * (2 ^ attempts_made as u64);
+        let next_time = to_retry.executed_at + Duration::from_millis(wait_time);
 
-    let new_job_id = id::gen_for_time("scheduled", next_time);
+        let new_job_id = id::gen_for_time("scheduled", next_time);
 
-    let mut hasher = DefaultHasher::new();
-    new_job_id.hash(&mut hasher);
-    let full_hash: u64 = hasher.finish();
-    let truncated_hash_u32 = (full_hash & 0xFFFFFFFF) as u32;
-    let hash = truncated_hash_u32 as i32;
+        let mut hasher = DefaultHasher::new();
+        new_job_id.hash(&mut hasher);
+        let full_hash: u64 = hasher.finish();
+        let truncated_hash_u32 = (full_hash & 0xFFFFFFFF) as u32;
+        let hash = truncated_hash_u32 as i32;
 
-    sqlx::query!(
-        r#"
+        sqlx::query!(
+            r#"
       INSERT INTO scheduled_jobs
         (
           id,
@@ -125,34 +130,24 @@ async fn schedule_retry_job(pool: &Pool<Postgres>, reached_end: &mut bool) -> an
           $12
         );
       "#,
-        new_job_id,
-        hash,
-        to_retry.region,
-        to_retry.one_off_job_id,
-        to_retry.cron_job_id,
-        Some(to_retry.id),
-        to_retry.tenant_id,
-        next_time,
-        to_retry.request_id,
-        to_retry.timeout_ms,
-        attempts_remaining,
-        to_retry.max_response_bytes
-    )
-    .execute(&mut *tx)
-    .await?;
+            new_job_id,
+            hash,
+            to_retry.region,
+            to_retry.one_off_job_id,
+            to_retry.cron_job_id,
+            Some(to_retry.id),
+            to_retry.tenant_id,
+            next_time,
+            to_retry.request_id,
+            to_retry.timeout_ms,
+            attempts_remaining,
+            to_retry.max_response_bytes
+        )
+        .execute(&mut *tx)
+        .await?;
 
-    tx.commit().await?;
+        tx.commit().await?;
 
-    Ok(())
-}
-
-pub async fn scheduling_loop(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let mut reached_end = false;
-    loop {
-        schedule_retry_job(&pool, &mut reached_end).await?;
-        if reached_end {
-            reached_end = false;
-            tokio::time::sleep(Duration::from_secs(3)).await;
-        }
+        Ok(())
     }
 }

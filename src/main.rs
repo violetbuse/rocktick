@@ -108,6 +108,14 @@ impl TryFrom<DevOptions> for BrokerOptions {
 pub struct SchedulerOptions {
     #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
+    #[arg(long, default_value_t = 1)]
+    cron_schedulers: usize,
+    #[arg(long, default_value_t = 1)]
+    tenant_schedulers: usize,
+    #[arg(long, default_value_t = 1)]
+    one_off_schedulers: usize,
+    #[arg(long, default_value_t = 1)]
+    retry_schedulers: usize,
 }
 
 impl TryFrom<DevOptions> for SchedulerOptions {
@@ -118,6 +126,10 @@ impl TryFrom<DevOptions> for SchedulerOptions {
             postgres_url: value
                 .postgres_url
                 .ok_or(anyhow!("No postgres url provided!"))?,
+            cron_schedulers: 1,
+            tenant_schedulers: 1,
+            one_off_schedulers: 1,
+            retry_schedulers: 1,
         })
     }
 }
