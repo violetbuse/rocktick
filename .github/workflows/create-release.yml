@@ -9,55 +9,44 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        target:
-          - x86_64-unknown-linux-musl
-          - x86_64-apple-darwin
-          - x86_64-pc-windows-gnu
-
+        include:
+          - rust_target: x86_64-unknown-linux-gnu
+            artifact_name: binary-bin-linux-amd64
+          - rust_target: aarch64-unknown-linux-gnu
+            artifact_name: binary-bin-linux-arm64
+          - rust_target: x86_64-apple-darwin
+            artifact_name: binary-bin-macos-amd64
+          - rust_target: aarch64-apple-darwin
+            artifact_name: binary-bin-macos-arm64
+          - rust_target: x86_64-pc-windows-gnu
+            artifact_name: binary-bin-windows-amd64
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Delete Env
-        run: rm -rf .env
+      - name: Remove Env
+        uses: JesseTG/rm@v1.0.3
+        with:
+          path: .env
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          target: ${{ matrix.target }}
-          override: true
+          target: ${{ matrix.rust_target }}
 
-      - name: Install dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Install Mingw for Windows cross-compilation
+        if: matrix.rust_target == 'x86_64-pc-windows-gnu'
+        run: sudo apt-get install -y gcc-mingw-w64-x86-64
 
-      - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Package
+      - name: Build the binary
         run: |
-          mkdir -p release
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            cp target/${{ matrix.target }}/release/myapp.exe release/
+          cargo build - release - target ${{ matrix.rust_target }}
+          if [[ "${{ matrix.artifact_name }}" == *.exe ]]; then
+            mv target/${{ matrix.rust_target }}/release/app_name.exe ${{ matrix.artifact_name }}
           else
-            cp target/${{ matrix.target }}/release/myapp release/
+            mv target/${{ matrix.rust_target }}/release/app ${{ matrix.artifact_name }}
           fi
-
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Assets
-        uses: softprops/action-gh-release@v1
-        with:
-          files: release/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
