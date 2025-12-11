@@ -42,7 +42,7 @@ jobs:
         run: |
           mkdir -p release
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            cp target/${{ matric.target }}/release/myapp.exe release/
+            cp target/${{ matrix.target }}/release/myapp.exe release/
           else
             cp target/${{ matrix.target }}/release/myapp release/
           fi
