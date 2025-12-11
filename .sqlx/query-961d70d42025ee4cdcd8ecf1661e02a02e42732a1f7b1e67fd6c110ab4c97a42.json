@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM scheduled_jobs WHERE one_off_job_id = $1 AND execution_id IS NULL;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "961d70d42025ee4cdcd8ecf1661e02a02e42732a1f7b1e67fd6c110ab4c97a42"
+}

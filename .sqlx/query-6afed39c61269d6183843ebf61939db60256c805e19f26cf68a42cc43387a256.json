@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                                UPDATE scheduled_jobs\n                                SET\n                                  execution_id = $2,\n                                  lock_nonce = NULL\n                                WHERE id = $1;\n                              ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6afed39c61269d6183843ebf61939db60256c805e19f26cf68a42cc43387a256"
+}

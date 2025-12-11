@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM scheduled_jobs WHERE cron_job_id = $1 AND execution_id IS NULL;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5cb4fc9a9e5a08b3b283437d5b05ef663c72bcad26fb5f8b5817121530ac0937"
+}

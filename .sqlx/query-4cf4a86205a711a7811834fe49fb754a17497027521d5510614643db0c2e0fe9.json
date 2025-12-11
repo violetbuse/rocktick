@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    SELECT *\n    FROM tenants\n    WHERE id = $1;\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "tokens",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "increment",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "period",
+        "type_info": "Interval"
+      },
+      {
+        "ordinal": 4,
+        "name": "next_increment",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "max_tokens",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "max_timeout",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "default_retries",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "max_max_response_bytes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "max_request_bytes",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4cf4a86205a711a7811834fe49fb754a17497027521d5510614643db0c2e0fe9"
+}

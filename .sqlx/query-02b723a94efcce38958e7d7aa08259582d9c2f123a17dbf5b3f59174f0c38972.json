@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          UPDATE cron_jobs\n          SET error = $2\n          WHERE id = $1;\n          ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "02b723a94efcce38958e7d7aa08259582d9c2f123a17dbf5b3f59174f0c38972"
+}

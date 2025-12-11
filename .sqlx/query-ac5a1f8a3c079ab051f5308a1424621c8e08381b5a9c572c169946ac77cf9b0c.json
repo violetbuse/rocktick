@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    SELECT\n      job.id,\n      req.body\n    FROM scheduled_jobs as job\n    INNER JOIN http_requests as req\n      ON req.id = job.request_id\n    WHERE job.id = $1\n      AND lock_nonce IS NOT NULL;",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "body",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "ac5a1f8a3c079ab051f5308a1424621c8e08381b5a9c572c169946ac77cf9b0c"
+}

@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    SELECT\n      job.id as id,\n      job.region as region,\n      job.one_off_job_id as one_off_job_id,\n      job.cron_job_id as cron_job_id,\n      job.timeout_ms as timeout_ms,\n      job.max_retries as max_retries,\n      job.max_response_bytes as max_response_bytes,\n      job.request_id as request_id,\n      job.tenant_id as tenant_id,\n      exec.executed_at as executed_at\n    FROM scheduled_jobs as job\n    INNER JOIN job_executions as exec ON job.execution_id = exec.id\n    LEFT JOIN\n      scheduled_jobs as pending_retry\n      ON job.id = pending_retry.retry_for_id\n    WHERE\n      exec.success = false AND\n      job.max_retries > 0 AND\n      pending_retry.id IS NULL\n    LIMIT 1 FOR UPDATE OF job SKIP LOCKED\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "region",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "one_off_job_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "cron_job_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "timeout_ms",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "max_retries",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "max_response_bytes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "request_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "tenant_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "executed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "e36f1711dec83d1bf806a4039bb7272129479c28132c9a5d169d164317f370f8"
+}

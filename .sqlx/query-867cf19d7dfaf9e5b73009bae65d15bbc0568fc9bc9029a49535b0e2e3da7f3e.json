@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE http_requests\n        SET\n          method = $1,\n          url = $2,\n          headers = $3,\n          body = $4\n        WHERE id = $5;\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "TextArray",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "867cf19d7dfaf9e5b73009bae65d15bbc0568fc9bc9029a49535b0e2e3da7f3e"
+}

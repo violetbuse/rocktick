@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                            SELECT id, lock_nonce, tenant_id\n                            FROM scheduled_jobs\n                            WHERE id = $1\n                              AND lock_nonce = $2\n                            FOR UPDATE;\n                            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "lock_nonce",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "tenant_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "cceed9f93a7ce44b55ee0d627652a4bf955e2ac3270ad10538697c0f02f0f31f"
+}

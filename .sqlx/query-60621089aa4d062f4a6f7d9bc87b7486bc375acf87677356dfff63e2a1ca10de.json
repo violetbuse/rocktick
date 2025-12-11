@@ -1,0 +1,137 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    SELECT\n      job.id,\n      job.region,\n      job.scheduled_at,\n      exe.success as \"success?\",\n      exe.executed_at as \"executed_at?\",\n      exe.response_error as \"response_error?\",\n      req.method,\n      req.url,\n      req.headers as req_headers,\n      req.body as req_body,\n      res.status as \"status?\",\n      res.headers as \"res_headers?\",\n      res.body as \"res_body?\",\n      job.timeout_ms,\n      job.max_retries,\n      job.max_response_bytes,\n      job.tenant_id,\n      job.one_off_job_id,\n      job.cron_job_id,\n      job.retry_for_id\n    FROM scheduled_jobs as job\n    INNER JOIN http_requests as req\n      ON req.id = job.request_id\n    LEFT JOIN job_executions exe\n      ON job.execution_id = exe.id\n    LEFT JOIN http_responses res\n      ON exe.response_id = res.id\n    WHERE\n      job.id = $1 AND\n      ($2::text IS NULL OR job.tenant_id = $2)\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "region",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "scheduled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "success?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "executed_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "response_error?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "method",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "req_headers",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 9,
+        "name": "req_body",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "status?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "res_headers?",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 12,
+        "name": "res_body?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "timeout_ms",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "max_retries",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "max_response_bytes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 16,
+        "name": "tenant_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 17,
+        "name": "one_off_job_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 18,
+        "name": "cron_job_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 19,
+        "name": "retry_for_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "60621089aa4d062f4a6f7d9bc87b7486bc375acf87677356dfff63e2a1ca10de"
+}
