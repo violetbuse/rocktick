@@ -70,7 +70,9 @@ pub struct DevOptions {
 
 #[derive(Debug, Clone, Parser, PartialEq, Eq)]
 pub struct ExecutorOptions {
+    #[arg(long, default_value = "http://[::1]:30001", env = "BROKER_URL")]
     broker_url: String,
+    #[arg(long, env = "EXECUTOR_REGION")]
     region: String,
 }
 
@@ -87,7 +89,9 @@ impl TryFrom<DevOptions> for ExecutorOptions {
 
 #[derive(Debug, Clone, Parser, PartialEq, Eq)]
 pub struct BrokerOptions {
+    #[arg(long, default_value_t = 30001, env = "BROKER_PORT")]
     port: usize,
+    #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
 }
 
@@ -108,13 +112,13 @@ impl TryFrom<DevOptions> for BrokerOptions {
 pub struct SchedulerOptions {
     #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
-    #[arg(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 1, env = "CRON_SCHEDULER_COUNT")]
     cron_schedulers: usize,
-    #[arg(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 1, env = "TENANT_SCHEDULER_COUNT")]
     tenant_schedulers: usize,
-    #[arg(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 1, env = "ONE_OFF_SCHEDULER_COUNT")]
     one_off_schedulers: usize,
-    #[arg(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 1, env = "RETRY_SCHEDULER_COUNT")]
     retry_schedulers: usize,
 }
 
