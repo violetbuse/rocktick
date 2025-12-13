@@ -59,7 +59,18 @@ pub struct DevOptions {
     #[arg(long, default_value_t = 30001)]
     broker_port: usize,
     #[arg(long, default_value = "local-1")]
+    /// The region the executor will run in.
     region: String,
+    #[arg(
+      long,
+      env = "VALID_REGIONS",
+      num_args = 1,
+      value_delimiter = ',',
+      default_values = vec!["local-1"]
+    )]
+    /// The regions accepted by the api. If you define
+    /// this, remember to include the --region parameter.
+    valid_regions: Vec<String>,
     #[arg(long, env = "DATABASE_URL")]
     postgres_url: Option<String>,
     #[arg(long, default_value_t = true)]
@@ -142,8 +153,8 @@ impl TryFrom<DevOptions> for SchedulerOptions {
 pub struct ApiOptions {
     #[arg(long, env = "PORT", default_value_t = 3000)]
     port: usize,
-    #[arg(long, env = "VALID_REGIONS")]
-    valid_regions: String,
+    #[arg(long, env = "VALID_REGIONS", num_args = 1, value_delimiter = ',')]
+    valid_regions: Vec<String>,
     #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
     #[arg(long, env = "AUTH_KEYS", num_args = 1, value_delimiter = ',')]
@@ -160,7 +171,7 @@ impl TryFrom<DevOptions> for ApiOptions {
             postgres_url: value
                 .postgres_url
                 .ok_or(anyhow!("No postgres url provided!"))?,
-            valid_regions: value.region,
+            valid_regions: value.valid_regions,
             auth_keys: value.auth_key.map(|s| vec![s]),
         })
     }

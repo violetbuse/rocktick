@@ -40,15 +40,9 @@ pub struct Config {
 
 impl Config {
     pub async fn from_cli(options: ApiOptions, pool: Pool<Postgres>) -> Self {
-        let valid_regions = options
-            .valid_regions
-            .split(",")
-            .map(|s| s.trim().to_string())
-            .collect();
-
         Self {
             port: options.port,
-            valid_regions,
+            valid_regions: options.valid_regions,
             pool,
             auth_keys: options.auth_keys,
         }
