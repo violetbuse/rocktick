@@ -52,6 +52,19 @@ jobs:
         if: matrix.use_cross
         run: cargo install cross --git https://github.com/cross-rs/cross
 
+      - name: Install Protobuf compiler
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install Protobuf compiler (macOS)
+        if: runner.os == 'macOS'
+        run: brew install protobuf
+
+      - name: Install Protoc (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install protoc
+
       - name: Build
         run: |
           if [ "${{ matrix.use_cross }}" = "true" ]; then
