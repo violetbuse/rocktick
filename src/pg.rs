@@ -16,8 +16,8 @@ pub async fn migrate_pg(pool: &Pool<Postgres>) -> anyhow::Result<()> {
 }
 
 pub async fn run_embedded(temporary: bool) -> anyhow::Result<String> {
-    println!("Starting embedded postgres database...");
     let mut settings = Settings::default();
+
     let mut data_dir = std::env::current_dir()?;
     data_dir.push(".rocktick");
     data_dir.push("pg");
@@ -27,7 +27,9 @@ pub async fn run_embedded(temporary: bool) -> anyhow::Result<String> {
 
     let mut postgresql = PostgreSQL::new(settings);
 
+    println!("Installing Postgres...");
     postgresql.setup().await?;
+    println!("Starting Postgres...");
     postgresql.start().await?;
 
     let db_name = "rocktick";
