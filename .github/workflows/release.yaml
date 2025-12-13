@@ -113,9 +113,9 @@ jobs:
         run: |
           mkdir dist
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            cp target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe dist/
+            cp target/${{ matrix.target }}/release/${{ env.BIN_NAME }}-${{ matrix.name }}.exe dist/
           else
-            cp target/${{ matrix.target }}/release/${{ env.BIN_NAME }} dist/
+            cp target/${{ matrix.target }}/release/${{ env.BIN_NAME }}-${{ matrix.name }} dist/
           fi
         shell: bash
 
