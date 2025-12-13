@@ -2,8 +2,6 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
     branches:
       - master
 
@@ -116,6 +114,7 @@ jobs:
 
       - name: Create release
         uses: softprops/action-gh-release@v2
+        if: github.ref_type == 'tag'
         with:
           files: artifacts/**/*
         env:
