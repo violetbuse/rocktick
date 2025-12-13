@@ -52,9 +52,12 @@ jobs:
         if: matrix.use_cross
         run: cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Install Protobuf compiler
+      - name: Install Protobuf compiler (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          echo "/usr/bin" >> $GITHUB_PATH
 
       - name: Install Protobuf compiler (macOS)
         if: runner.os == 'macOS'
