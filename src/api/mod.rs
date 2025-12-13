@@ -35,7 +35,7 @@ pub struct Config {
     port: usize,
     pool: Pool<Postgres>,
     valid_regions: Vec<String>,
-    auth_key: Option<String>,
+    auth_keys: Option<Vec<String>>,
 }
 
 impl Config {
@@ -50,7 +50,7 @@ impl Config {
             port: options.port,
             valid_regions,
             pool,
-            auth_key: options.auth_key,
+            auth_keys: options.auth_keys,
         }
     }
 }
@@ -84,7 +84,7 @@ impl Modify for BearerAuth {
 pub struct Context {
     pub pool: Pool<Postgres>,
     pub valid_regions: Vec<String>,
-    auth_key: Option<String>,
+    auth_keys: Option<Vec<String>>,
 }
 
 #[derive(FromRequest)]
@@ -228,7 +228,7 @@ pub async fn start(config: Config) -> anyhow::Result<()> {
     let context = Context {
         pool: config.pool,
         valid_regions: config.valid_regions,
-        auth_key: config.auth_key,
+        auth_keys: config.auth_keys,
     };
 
     let router = create_router();
@@ -280,7 +280,7 @@ async fn openapi_json() -> Json<Value> {
 }
 
 async fn auth_middleware(State(ctx): State<Context>, req: Request, next: Next) -> Response {
-    if ctx.auth_key.is_none() {
+    if ctx.auth_keys.is_none() {
         return next.run(req).await;
     }
 
@@ -288,7 +288,7 @@ async fn auth_middleware(State(ctx): State<Context>, req: Request, next: Next) -
         return next.run(req).await;
     }
 
-    let expected_token = ctx.auth_key.unwrap();
+    let expected_tokens = ctx.auth_keys.unwrap();
 
     let header_token = req
         .headers()
@@ -298,7 +298,7 @@ async fn auth_middleware(State(ctx): State<Context>, req: Request, next: Next) -
         .map(|s| s.to_string());
 
     if let Some(token) = header_token
-        && token == expected_token
+        && expected_tokens.contains(&token)
     {
         next.run(req).await
     } else {

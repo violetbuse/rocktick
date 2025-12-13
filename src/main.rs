@@ -146,8 +146,9 @@ pub struct ApiOptions {
     valid_regions: String,
     #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
-    #[arg(long, env = "AUTH_KEY")]
-    auth_key: Option<String>,
+    #[arg(long, env = "AUTH_KEYS", num_args = 1, value_delimiter = ',')]
+    /// A comma separated string of auth keys
+    auth_keys: Option<Vec<String>>,
 }
 
 impl TryFrom<DevOptions> for ApiOptions {
@@ -160,7 +161,7 @@ impl TryFrom<DevOptions> for ApiOptions {
                 .postgres_url
                 .ok_or(anyhow!("No postgres url provided!"))?,
             valid_regions: value.region,
-            auth_key: value.auth_key,
+            auth_keys: value.auth_key.map(|s| vec![s]),
         })
     }
 }
