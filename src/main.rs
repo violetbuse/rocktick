@@ -54,11 +54,11 @@ pub enum Commands {
 
 #[derive(Debug, Clone, Parser, PartialEq, Eq)]
 pub struct DevOptions {
-    #[arg(long, default_value_t = 3000)]
+    #[arg(long, default_value_t = 9090)]
     api_port: usize,
     #[arg(long, default_value_t = 30001)]
     broker_port: usize,
-    #[arg(long, default_value = "local-1")]
+    #[arg(long, default_value = "na-east")]
     /// The region the executor will run in.
     region: String,
     #[arg(
@@ -66,7 +66,7 @@ pub struct DevOptions {
       env = "VALID_REGIONS",
       num_args = 1,
       value_delimiter = ',',
-      default_values = vec!["local-1"]
+      default_values = vec!["na-east", "na-west", "asia-east", "eu-west"]
     )]
     /// The regions accepted by the api. If you define
     /// this, remember to include the --region parameter.
