@@ -17,6 +17,7 @@ tonic::include_proto!("broker");
 
 pub struct Config {
     port: usize,
+    hostname: String,
     pool: Pool<Postgres>,
 }
 
@@ -24,6 +25,7 @@ impl Config {
     pub async fn from_cli(options: BrokerOptions, pool: Pool<Postgres>) -> Self {
         Self {
             pool,
+            hostname: options.hostname,
             port: options.port,
         }
     }
@@ -311,7 +313,7 @@ async fn run_cleanup(pool: Pool<Postgres>) -> anyhow::Result<()> {
 }
 
 pub async fn start(config: Config) -> anyhow::Result<()> {
-    let addr = format!("[::1]:{}", config.port).parse()?;
+    let addr = format!("{}:{}", config.hostname, config.port).parse()?;
 
     let cleanup_fut = run_cleanup(config.pool.clone());
 

@@ -33,6 +33,7 @@ use crate::ApiOptions;
 #[derive(Debug, Clone)]
 pub struct Config {
     port: usize,
+    hostname: String,
     pool: Pool<Postgres>,
     valid_regions: Vec<String>,
     auth_keys: Option<Vec<String>>,
@@ -42,8 +43,9 @@ impl Config {
     pub async fn from_cli(options: ApiOptions, pool: Pool<Postgres>) -> Self {
         Self {
             port: options.port,
-            valid_regions: options.valid_regions,
+            hostname: options.hostname,
             pool,
+            valid_regions: options.valid_regions,
             auth_keys: options.auth_keys,
         }
     }
@@ -239,7 +241,8 @@ pub async fn start(config: Config) -> anyhow::Result<()> {
         .merge(scalar)
         .with_state(context);
 
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.port)).await?;
+    let listener =
+        tokio::net::TcpListener::bind(format!("{}:{}", config.hostname, config.port)).await?;
     println!("Listening on {}", listener.local_addr().unwrap());
 
     axum::serve(listener, app).await?;

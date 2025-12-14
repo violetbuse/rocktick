@@ -102,6 +102,8 @@ impl TryFrom<DevOptions> for ExecutorOptions {
 pub struct BrokerOptions {
     #[arg(long, default_value_t = 30001, env = "BROKER_PORT")]
     port: usize,
+    #[arg(long, default_value = "[::0]", env = "BROKER_HOSTNAME")]
+    hostname: String,
     #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
 }
@@ -112,6 +114,7 @@ impl TryFrom<DevOptions> for BrokerOptions {
     fn try_from(value: DevOptions) -> Result<Self, Self::Error> {
         Ok(Self {
             port: value.broker_port,
+            hostname: "[::0]".to_string(),
             postgres_url: value
                 .postgres_url
                 .ok_or(anyhow!("No postgres url provided!"))?,
@@ -153,6 +156,8 @@ impl TryFrom<DevOptions> for SchedulerOptions {
 pub struct ApiOptions {
     #[arg(long, env = "PORT", default_value_t = 3000)]
     port: usize,
+    #[arg(long, env = "HOSTNAME", default_value = "[::0]")]
+    hostname: String,
     #[arg(long, env = "VALID_REGIONS", num_args = 1, value_delimiter = ',')]
     valid_regions: Vec<String>,
     #[arg(long, env = "DATABASE_URL")]
@@ -168,6 +173,7 @@ impl TryFrom<DevOptions> for ApiOptions {
     fn try_from(value: DevOptions) -> Result<Self, Self::Error> {
         Ok(Self {
             port: value.api_port,
+            hostname: "[::0]".to_string(),
             postgres_url: value
                 .postgres_url
                 .ok_or(anyhow!("No postgres url provided!"))?,
