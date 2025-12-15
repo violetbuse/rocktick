@@ -7,7 +7,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 use crate::{
     api::{
         ApiError, ApiListResponse, Context, JsonBody, TenantId, executions,
-        models::{Execution, OneOffJob, Request},
+        models::{Execution, HttpRequest, OneOffJob},
     },
     id,
 };
@@ -41,7 +41,7 @@ impl IntermediateOneOffJob {
             id: self.id.clone(),
             region: self.region.clone(),
             execute_at: self.execute_at,
-            request: Request {
+            request: HttpRequest {
                 method: self.method.clone(),
                 url: self.url.clone(),
                 headers: self
@@ -69,7 +69,7 @@ impl IntermediateOneOffJob {
 struct CreateJob {
     region: Option<String>,
     execute_at: i64,
-    request: Request,
+    request: HttpRequest,
     timeout_ms: Option<i32>,
     max_retries: Option<i32>,
     max_response_bytes: Option<i32>,
@@ -290,7 +290,7 @@ async fn list_jobs(
 struct UpdateJob {
     region: Option<String>,
     execute_at: Option<i64>,
-    request: Option<Request>,
+    request: Option<HttpRequest>,
     timeout_ms: Option<i32>,
     max_retries: Option<i32>,
     max_response_bytes: Option<i32>,

@@ -12,7 +12,7 @@ pub struct CronJob {
     pub id: String,
     pub region: String,
     pub schedule: String,
-    pub request: Request,
+    pub request: HttpRequest,
     pub executions: Vec<Execution>,
     pub timeout_ms: Option<i32>,
     pub max_retries: i32,
@@ -31,7 +31,7 @@ pub struct OneOffJob {
     pub id: String,
     pub region: String,
     pub execute_at: i64,
-    pub request: Request,
+    pub request: HttpRequest,
     pub executions: Vec<Execution>,
     pub timeout_ms: Option<i32>,
     pub max_retries: i32,
@@ -52,8 +52,8 @@ pub struct Execution {
     pub scheduled_at: i64,
     pub executed_at: Option<i64>,
     pub success: Option<bool>,
-    pub request: Request,
-    pub response: Option<Response>,
+    pub request: HttpRequest,
+    pub response: Option<HttpResponse>,
     pub response_error: Option<String>,
     pub timeout_ms: Option<i32>,
     pub max_retries: i32,
@@ -71,14 +71,14 @@ impl IntoResponse for Execution {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct Request {
+pub struct HttpRequest {
     pub method: String,
     pub url: String,
     pub headers: HashMap<String, String>,
     pub body: Option<String>,
 }
 
-impl Request {
+impl HttpRequest {
     pub fn verify(&self) -> Result<(), ApiError> {
         if self.method.len() > 10 {
             return Err(ApiError::bad_request(Some(&format!(
@@ -110,7 +110,7 @@ impl Request {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct Response {
+pub struct HttpResponse {
     pub status: i32,
     pub headers: HashMap<String, String>,
     pub body: String,

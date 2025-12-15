@@ -7,7 +7,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::api::{
     ApiError, ApiListResponse, Context, TenantId,
-    models::{Execution, Request, Response},
+    models::{Execution, HttpRequest, HttpResponse},
 };
 
 #[derive(Debug)]
@@ -42,7 +42,7 @@ impl IntermediateExecution {
             scheduled_at: self.scheduled_at.timestamp(),
             executed_at: self.executed_at.map(|time| time.timestamp()),
             success: self.success,
-            request: Request {
+            request: HttpRequest {
                 method: self.method.clone(),
                 url: self.url.clone(),
                 headers: self
@@ -58,7 +58,7 @@ impl IntermediateExecution {
                 body: self.req_body.clone(),
             },
             response: match (self.status, self.res_headers.clone(), self.res_body.clone()) {
-                (Some(status), Some(headers), Some(body)) => Some(Response {
+                (Some(status), Some(headers), Some(body)) => Some(HttpResponse {
                     status,
                     headers: headers
                         .iter()

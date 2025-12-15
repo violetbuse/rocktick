@@ -9,7 +9,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 use crate::{
     api::{
         ApiError, ApiListResponse, Context, JsonBody, TenantId, executions,
-        models::{CronJob, Execution, Request},
+        models::{CronJob, Execution, HttpRequest},
     },
     id,
 };
@@ -44,7 +44,7 @@ impl IntermediateCronJob {
             id: self.id.clone(),
             region: self.region.clone(),
             schedule: self.schedule.clone(),
-            request: Request {
+            request: HttpRequest {
                 method: self.method.clone(),
                 url: self.url.clone(),
                 headers: self
@@ -72,7 +72,7 @@ impl IntermediateCronJob {
 struct CreateCronJob {
     region: Option<String>,
     schedule: String,
-    request: Request,
+    request: HttpRequest,
     timeout_ms: Option<i32>,
     max_retries: Option<i32>,
     max_response_bytes: Option<i32>,
@@ -297,7 +297,7 @@ async fn list_cron_jobs(
 struct UpdateCronJob {
     region: Option<String>,
     schedule: Option<String>,
-    request: Option<Request>,
+    request: Option<HttpRequest>,
     timeout_ms: Option<i32>,
     max_retries: Option<i32>,
     max_response_bytes: Option<i32>,
