@@ -61,11 +61,10 @@ impl BrokerTrait for Broker {
                   AND execution_id IS NULL
                   AND (tenants.tokens > 0 OR tenants.tokens IS NULL)
                   AND (
-                    (region = $1 AND scheduled_at <= now() + interval '5 seconds')
+                    (region = $1 AND scheduled_at <= now() + interval '3 seconds')
                     OR (scheduled_at <= now() - interval '5 seconds')
                   )
                 ORDER BY scheduled_at ASC
-                LIMIT $2
                 FOR UPDATE OF job SKIP LOCKED
               )
               UPDATE scheduled_jobs AS job
@@ -91,8 +90,7 @@ impl BrokerTrait for Broker {
                 req.headers,
                 req.body;
               "#,
-                region,
-                2000
+                region
             )
             .fetch(&pool);
 

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n    SELECT\n      job.id,\n      req.body\n    FROM scheduled_jobs as job\n    INNER JOIN http_requests as req\n      ON req.id = job.request_id\n    WHERE job.id = $1\n      AND lock_nonce IS NOT NULL;",
+  "query": "\n    SELECT\n      job.id,\n      req.body\n    FROM scheduled_jobs as job\n    INNER JOIN http_requests as req\n      ON req.id = job.request_id\n    WHERE job.id = $1\n      AND lock_nonce IS NOT NULL\n      AND ($2::text IS NULL OR $2 = tenant_id);",
   "describe": {
     "columns": [
       {
@@ -16,6 +16,7 @@
     ],
     "parameters": {
       "Left": [
+        "Text",
         "Text"
       ]
     },
@@ -24,5 +25,5 @@
       true
     ]
   },
-  "hash": "ac5a1f8a3c079ab051f5308a1424621c8e08381b5a9c572c169946ac77cf9b0c"
+  "hash": "8869197ac1cada9ce6ae8f786d29fe9825c08e504c9618634fd245048b0bf0bb"
 }

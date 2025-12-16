@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::api::{ApiError, Context};
+use crate::api::{ApiError, Context, TenantId};
 
 #[derive(Debug, Serialize, ToSchema)]
 struct JobVerification {
@@ -37,6 +37,7 @@ impl IntoResponse for JobVerification {
 async fn verify_request(
     State(ctx): State<Context>,
     Path(job_id): Path<String>,
+    TenantId(tenant_id): TenantId,
 ) -> Result<JobVerification, ApiError> {
     let job = sqlx::query!(
         r#"
@@ -47,8 +48,10 @@ async fn verify_request(
     INNER JOIN http_requests as req
       ON req.id = job.request_id
     WHERE job.id = $1
-      AND lock_nonce IS NOT NULL;"#,
-        job_id
+      AND lock_nonce IS NOT NULL
+      AND ($2::text IS NULL OR $2 = tenant_id);"#,
+        job_id,
+        tenant_id
     )
     .fetch_optional(&ctx.pool)
     .await;

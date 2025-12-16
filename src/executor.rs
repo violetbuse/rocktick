@@ -40,6 +40,7 @@ struct ExecutorState {
     exec_results: Arc<Mutex<Vec<JobExecution>>>,
     broker_url: String,
     region: String,
+    error_tx: mpsc::Sender<anyhow::Error>,
 }
 
 fn is_private_ip(ip: &IpAddr) -> bool {
@@ -255,16 +256,29 @@ async fn fetch_and_start_jobs(state: ExecutorState) -> anyhow::Result<()> {
         .await?
         .into_inner();
 
-    while let Some(job) = jobs_stream.message().await? {
-        tokio::spawn(run_job(job, state.clone()));
-    }
+    tokio::spawn(async move {
+        loop {
+            match jobs_stream.message().await {
+                Err(status) => {
+                    let _ = state.error_tx.send(status.into()).await;
+                    break;
+                }
+                Ok(None) => {
+                    break;
+                }
+                Ok(Some(job)) => {
+                    tokio::spawn(run_job(job, state.clone()));
+                }
+            }
+        }
+    });
 
     Ok(())
 }
 
 async fn poll_jobs_loop(state: ExecutorState) -> anyhow::Result<()> {
     loop {
-        tokio::time::sleep(Duration::from_secs(3)).await;
+        tokio::time::sleep(Duration::from_secs(2)).await;
         fetch_and_start_jobs(state.clone()).await?;
     }
 }
@@ -276,6 +290,7 @@ async fn submit_job_results(state: ExecutorState) -> anyhow::Result<()> {
     if !execution_results.is_empty() {
         let (tx, rx) = mpsc::channel(1);
 
+        let iter_state = state.clone();
         tokio::spawn(async move {
             let mut remaining = Vec::new();
 
@@ -286,15 +301,19 @@ async fn submit_job_results(state: ExecutorState) -> anyhow::Result<()> {
             }
 
             if !remaining.is_empty() {
-                state.exec_results.lock().await.append(&mut remaining);
+                iter_state.exec_results.lock().await.append(&mut remaining);
             }
         });
 
-        let req = Request::new(ReceiverStream::new(rx));
+        let submission_state = state.clone();
+        tokio::spawn(async move {
+            let req = Request::new(ReceiverStream::new(rx));
 
-        if let Err(e) = client.record_execution(req).await {
-            eprintln!("Error submitting job results {e:?}");
-        }
+            if let Err(e) = client.record_execution(req).await {
+                eprintln!("Error submitting job results {e:?}");
+                let _ = submission_state.error_tx.send(e.into()).await;
+            }
+        });
     }
 
     Ok(())
@@ -302,7 +321,7 @@ async fn submit_job_results(state: ExecutorState) -> anyhow::Result<()> {
 
 async fn submit_job_results_loop(state: ExecutorState) -> anyhow::Result<()> {
     loop {
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(3)).await;
         submit_job_results(state.clone()).await?;
     }
 }
@@ -310,15 +329,21 @@ async fn submit_job_results_loop(state: ExecutorState) -> anyhow::Result<()> {
 pub async fn start(config: Config) -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_secs(rand::random_range(0..4))).await;
 
+    let (error_tx, mut error_rx) = mpsc::channel(1);
+
     let state = ExecutorState {
         exec_results: Arc::new(Mutex::new(Vec::new())),
         broker_url: config.broker_url.clone(),
         region: config.region.clone(),
+        error_tx,
     };
 
     select! {
       poll_res = poll_jobs_loop(state.clone()) => {poll_res?;},
       submit_res = submit_job_results_loop(state.clone()) => {submit_res?;},
+      Some(err) = error_rx.recv() => {
+        return Err(err);
+      }
     }
 
     Ok(())
