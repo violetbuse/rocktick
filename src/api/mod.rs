@@ -57,7 +57,7 @@ impl Config {
   info(title = "Rocktick",),
   components(),
   security(("bearer_auth" = [])),
-  modifiers(&BearerAuth, &TenantIdHeader)
+  modifiers(&BearerAuth)
 )]
 struct MyOpenApiSpec;
 
@@ -212,65 +212,6 @@ where
                 .and_then(|v| v.to_str().ok())
                 .map(|v| v.to_string()),
         ))
-    }
-}
-
-struct TenantIdHeader;
-
-impl Modify for TenantIdHeader {
-    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        // let header_param = openapi::path::ParameterBuilder::new()
-        //     .name("tenant-id")
-        //     .description(Some(
-        //         "The id for the tenant that this request originates from.",
-        //     ))
-        //     .parameter_in(openapi::path::ParameterIn::Header)
-        //     .required(openapi::Required::False)
-        //     .schema(Some(schema!(String)))
-        //     .build();
-
-        // for (key, path_item) in openapi.paths.paths.iter_mut() {
-        //     println!("key: {key}");
-        //     let maybe_add = |op: &mut openapi::path::Operation| {
-        //         let params = op.parameters.get_or_insert_with(Vec::new);
-
-        //         let exists = params.iter().any(|p| {
-        //             p.name == "tenant-id"
-        //                 && matches!(p.parameter_in, openapi::path::ParameterIn::Header)
-        //         });
-
-        //         println!("exists {exists}");
-
-        //         if !exists {
-        //             params.push(header_param.clone());
-        //         }
-        //     };
-
-        //     if let Some(op) = path_item.get.as_mut() {
-        //         maybe_add(op);
-        //     }
-        //     if let Some(op) = path_item.post.as_mut() {
-        //         maybe_add(op);
-        //     }
-        //     if let Some(op) = path_item.put.as_mut() {
-        //         maybe_add(op);
-        //     }
-        //     if let Some(op) = path_item.patch.as_mut() {
-        //         maybe_add(op);
-        //     }
-        //     if let Some(op) = path_item.delete.as_mut() {
-        //         maybe_add(op);
-        //     }
-        //     if let Some(op) = path_item.head.as_mut() {
-        //         maybe_add(op);
-        //     }
-        //     if let Some(op) = path_item.options.as_mut() {
-        //         maybe_add(op);
-        //     }
-        //     if let Some(op) = path_item.trace.as_mut() {
-        //         maybe_add(op);
-        //     }
-        // }
     }
 }
 
