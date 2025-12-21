@@ -1,9 +1,12 @@
-use axum::extract::{Path, State};
+use axum::{
+    extract::{Path, State},
+    routing::{get, post},
+};
 use chrono::TimeDelta;
 use serde::Deserialize;
 use sqlx::postgres::types::PgInterval;
 use utoipa::ToSchema;
-use utoipa_axum::{router::OpenApiRouter, routes};
+use utoipa_axum::router::OpenApiRouter;
 
 use crate::{
     api::{ApiError, Context, JsonBody, TenantId, models::Tenant},
@@ -18,18 +21,9 @@ struct CreateTenant {
     default_retries: i32,
     max_max_response_bytes: i32,
     max_request_bytes: i32,
+    retain_for_days: i32,
 }
 
-#[utoipa::path(
-  post,
-  path = "/api/tenants",
-  request_body = CreateTenant,
-  responses(
-    (status = 200, body =  Tenant),
-    (status = "4XX", body =  ApiError),
-    (status = "5XX", body =  ApiError)),
-  tag = "tenants"
-)]
 async fn create_tenant(
     State(ctx): State<Context>,
     TenantId(tenant_id): TenantId,
@@ -45,8 +39,8 @@ async fn create_tenant(
     let new_tenant = sqlx::query!(
         r#"
     INSERT INTO tenants
-      (id, tokens, max_tokens, increment, period, max_timeout, default_retries, max_max_response_bytes, max_request_bytes)
-    VALUES ($1, $2 ,$3, $4, $5, $6, $7, $8, $9) RETURNING *;
+      (id, tokens, max_tokens, increment, period, max_timeout, default_retries, max_max_response_bytes, max_request_bytes, retain_for_days)
+    VALUES ($1, $2 ,$3, $4, $5, $6, $7, $8, $9, $10) RETURNING *;
     "#,
         new_id,
         starting_tokens,
@@ -56,7 +50,8 @@ async fn create_tenant(
         create_opts.max_timeout,
         create_opts.default_retries,
         create_opts.max_max_response_bytes,
-        create_opts.max_request_bytes
+        create_opts.max_request_bytes,
+        create_opts.retain_for_days
     )
     .fetch_one(&ctx.pool)
     .await?;
@@ -70,20 +65,12 @@ async fn create_tenant(
         default_retries: new_tenant.default_retries,
         max_max_response_bytes: new_tenant.max_max_response_bytes,
         max_request_bytes: new_tenant.max_request_bytes,
+        retain_for_days: new_tenant.retain_for_days,
     };
 
     Ok(tenant)
 }
 
-#[utoipa::path(
-  get,
-  path = "/api/tenants/{tenant_id}",
-  params(("tenant_id", description = "Id of the tenant")),
-  responses((status = 200, body =  Tenant),
-    (status = "4XX", body =  ApiError),
-    (status = "5XX", body =  ApiError)),
-  tag = "tenants"
-)]
 async fn get_tenant(
     State(ctx): State<Context>,
     TenantId(requesting_tenant_id): TenantId,
@@ -125,6 +112,7 @@ async fn get_tenant(
         default_retries: tenant.default_retries,
         max_max_response_bytes: tenant.max_max_response_bytes,
         max_request_bytes: tenant.max_request_bytes,
+        retain_for_days: tenant.retain_for_days,
     };
 
     Ok(res)
@@ -139,6 +127,7 @@ struct UpdateTenant {
     default_retries: Option<i32>,
     max_max_response_bytes: Option<i32>,
     max_request_bytes: Option<i32>,
+    retain_for_days: Option<i32>,
 }
 
 #[utoipa::path(
@@ -180,8 +169,9 @@ async fn update_tenant(
         max_timeout = COALESCE($5, max_timeout),
         default_retries = COALESCE($6, default_retries),
         max_max_response_bytes = COALESCE($7, max_max_response_bytes),
-        max_request_bytes = COALESCE($8, max_request_bytes)
-      WHERE id = $9 RETURNING *
+        max_request_bytes = COALESCE($8, max_request_bytes),
+        retain_for_days = COALESCE($9, retain_for_days)
+      WHERE id = $10 RETURNING *
       "#,
         update_opts.tokens,
         update_opts.max_tokens,
@@ -191,6 +181,7 @@ async fn update_tenant(
         update_opts.default_retries,
         update_opts.max_max_response_bytes,
         update_opts.max_request_bytes,
+        update_opts.retain_for_days,
         tenant_id
     )
     .fetch_optional(&ctx.pool)
@@ -215,6 +206,7 @@ async fn update_tenant(
         default_retries: tenant.default_retries,
         max_max_response_bytes: tenant.max_max_response_bytes,
         max_request_bytes: tenant.max_request_bytes,
+        retain_for_days: tenant.retain_for_days,
     };
 
     Ok(res)
@@ -222,8 +214,11 @@ async fn update_tenant(
 
 pub fn init_router() -> OpenApiRouter<Context> {
     OpenApiRouter::new()
-        .routes(routes!(create_tenant))
-        .routes(routes!(get_tenant, update_tenant))
+        .route("/api/tenants", post(create_tenant))
+        .route(
+            "/api/tenants/{tenant_id}",
+            get(get_tenant).post(update_tenant),
+        )
 }
 
 const MIN_PERIOD_MS: f32 = 60_000.;

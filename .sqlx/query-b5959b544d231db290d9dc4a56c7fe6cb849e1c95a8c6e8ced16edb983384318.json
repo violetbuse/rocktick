@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n      WITH\n        job AS (\n          SELECT *\n          FROM one_off_jobs\n          WHERE id = $1\n            AND ($2::text IS NULL OR tenant_id = $2)\n          FOR UPDATE\n        ),\n        req AS (\n          SELECT *\n          FROM http_requests\n          WHERE id = (SELECT request_id FROM job)\n          FOR UPDATE\n        )\n      SELECT\n        job.id,\n        job.region,\n        job.execute_at,\n        job.timeout_ms,\n        job.max_retries,\n        job.max_response_bytes,\n        req.id as req_id,\n        req.method,\n        req.url,\n        req.headers,\n        req.body\n      FROM job\n      JOIN req ON req.id = job.request_id\n      ",
+  "query": "\n      WITH\n        job AS (\n          SELECT *\n          FROM one_off_jobs\n          WHERE deleted_at IS NULL AND id = $1\n            AND ($2::text IS NULL OR tenant_id = $2)\n          FOR UPDATE\n        ),\n        req AS (\n          SELECT *\n          FROM http_requests\n          WHERE id = (SELECT request_id FROM job)\n          FOR UPDATE\n        )\n      SELECT\n        job.id,\n        job.region,\n        job.execute_at,\n        job.timeout_ms,\n        job.max_retries,\n        job.max_response_bytes,\n        req.id as req_id,\n        req.method,\n        req.url,\n        req.headers,\n        req.body\n      FROM job\n      JOIN req ON req.id = job.request_id\n      ",
   "describe": {
     "columns": [
       {
@@ -79,5 +79,5 @@
       true
     ]
   },
-  "hash": "d552f6a9c6c3023312c095104ab5b7ab5a8be21a6fc9b1f93ee7047fd8eb07be"
+  "hash": "b5959b544d231db290d9dc4a56c7fe6cb849e1c95a8c6e8ced16edb983384318"
 }

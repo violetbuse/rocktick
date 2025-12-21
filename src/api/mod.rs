@@ -21,10 +21,9 @@ use sqlx::{Pool, Postgres};
 use utoipa::{
     Modify, OpenApi, ToSchema,
     openapi::{
-        self, OpenApi as OpenApiSpec,
+        OpenApi as OpenApiSpec,
         security::{HttpBuilder, SecurityScheme},
     },
-    schema,
 };
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};

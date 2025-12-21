@@ -134,6 +134,8 @@ pub struct SchedulerOptions {
     one_off_schedulers: usize,
     #[arg(long, default_value_t = 1, env = "RETRY_SCHEDULER_COUNT")]
     retry_schedulers: usize,
+    #[arg(long, default_value_t = 1, env = "PAST_RETENTION_SCHEDULER_COUNT")]
+    past_retention_schedulers: usize,
 }
 
 impl TryFrom<DevOptions> for SchedulerOptions {
@@ -148,6 +150,7 @@ impl TryFrom<DevOptions> for SchedulerOptions {
             tenant_schedulers: 1,
             one_off_schedulers: 1,
             retry_schedulers: 1,
+            past_retention_schedulers: 1,
         })
     }
 }

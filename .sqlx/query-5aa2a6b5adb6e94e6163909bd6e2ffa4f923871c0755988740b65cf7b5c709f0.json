@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n      SELECT\n        job.id,\n        job.region,\n        job.tenant_id,\n        req.method,\n        req.url,\n        req.headers,\n        req.body,\n        job.execute_at,\n        job.timeout_ms,\n        job.max_retries,\n        job.max_response_bytes,\n        job.created_at\n      FROM one_off_jobs as job\n      INNER JOIN http_requests as req\n        ON req.id = job.request_id\n      WHERE\n        ($2::text IS NULL OR job.tenant_id = $2)\n        AND ($3::text IS NULL OR job.id < $3)\n      ORDER BY job.id DESC\n      LIMIT $1;\n      ",
+  "query": "\n      UPDATE one_off_jobs\n      SET\n        region = $2,\n        execute_at = $3,\n        timeout_ms = $4,\n        max_retries = $5,\n        max_response_bytes = $6\n      FROM one_off_jobs as job\n      JOIN http_requests AS req\n        ON req.id = job.request_id\n      WHERE job.id = $1\n      RETURNING\n        job.id,\n        job.region,\n        job.tenant_id,\n        req.id as req_id,\n        req.method,\n        req.url,\n        req.headers,\n        req.body,\n        job.execute_at,\n        job.timeout_ms,\n        job.max_retries,\n        job.max_response_bytes,\n        job.created_at\n      ",
   "describe": {
     "columns": [
       {
@@ -20,61 +20,70 @@
       },
       {
         "ordinal": 3,
-        "name": "method",
+        "name": "req_id",
         "type_info": "Varchar"
       },
       {
         "ordinal": 4,
+        "name": "method",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
         "name": "url",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "headers",
         "type_info": "TextArray"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "body",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "execute_at",
         "type_info": "Int8"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "timeout_ms",
         "type_info": "Int4"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "max_retries",
         "type_info": "Int4"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "max_response_bytes",
         "type_info": "Int4"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Int8",
         "Text",
-        "Text"
+        "Text",
+        "Int8",
+        "Int4",
+        "Int4",
+        "Int4"
       ]
     },
     "nullable": [
       false,
       false,
       true,
+      false,
       false,
       false,
       false,
@@ -86,5 +95,5 @@
       false
     ]
   },
-  "hash": "043e8040df47e1051ef67b5aebb5d9419070d1de92bd046b50877836155f7c0b"
+  "hash": "5aa2a6b5adb6e94e6163909bd6e2ffa4f923871c0755988740b65cf7b5c709f0"
 }

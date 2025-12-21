@@ -1,5 +1,6 @@
 mod cron;
 mod one_off;
+mod retention;
 mod retries;
 mod tenants;
 
@@ -13,7 +14,8 @@ use tokio_stream::StreamExt;
 use crate::{
     SchedulerOptions,
     scheduler::{
-        cron::CronScheduler, one_off::OneOffScheduler, retries::RetryScheduler,
+        cron::CronScheduler, one_off::OneOffScheduler, retention::one_off::OneOffPastRetention,
+        retention::scheduled::ScheduledPastRetention, retries::RetryScheduler,
         tenants::TenantScheduler,
     },
 };
@@ -25,6 +27,7 @@ pub struct Config {
     tenant_count: usize,
     one_off_count: usize,
     retry_count: usize,
+    past_retention_count: usize,
 }
 
 impl Config {
@@ -35,12 +38,14 @@ impl Config {
             tenant_count: options.tenant_schedulers,
             one_off_count: options.one_off_schedulers,
             retry_count: options.retry_schedulers,
+            past_retention_count: options.past_retention_schedulers,
         }
     }
 }
 
 #[async_trait::async_trait]
 pub trait Scheduler {
+    const WAIT: Duration = Duration::ZERO;
     async fn run_once(pool: &Pool<Postgres>, reached_end: &mut bool) -> anyhow::Result<()>;
 }
 
@@ -57,6 +62,8 @@ async fn scheduling_loop<S: Scheduler>(pool: &Pool<Postgres>) -> anyhow::Result<
 }
 
 async fn run_multiple<S: Scheduler>(pool: &Pool<Postgres>, count: usize) -> anyhow::Result<()> {
+    tokio::time::sleep(S::WAIT).await;
+
     let mut tasks = FuturesUnordered::new();
 
     for _ in 0..count {
@@ -80,12 +87,18 @@ pub async fn start(config: Config) -> anyhow::Result<()> {
     let cron_jobs_sched = run_multiple::<CronScheduler>(&config.pool, config.cron_count);
     let retry_jobs_sched = run_multiple::<RetryScheduler>(&config.pool, config.retry_count);
     let tenant_jobs_sched = run_multiple::<TenantScheduler>(&config.pool, config.tenant_count);
+    let past_retention_jobs_sched =
+        run_multiple::<ScheduledPastRetention>(&config.pool, config.past_retention_count);
+    let past_retention_jobs_one_off =
+        run_multiple::<OneOffPastRetention>(&config.pool, config.past_retention_count);
 
     select! {
       res = one_off_jobs_sched => res?,
       res = cron_jobs_sched => res?,
       res = retry_jobs_sched => res?,
       res = tenant_jobs_sched => res?,
+      res = past_retention_jobs_sched => res?,
+      res = past_retention_jobs_one_off => res?,
     }
 
     Ok(())

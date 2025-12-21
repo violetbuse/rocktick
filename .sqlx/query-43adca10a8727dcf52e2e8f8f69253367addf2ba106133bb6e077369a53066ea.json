@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          UPDATE http_requests\n          SET\n            body = '<deleted>',\n            headers = '{}'\n          WHERE id = $1\n          ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "43adca10a8727dcf52e2e8f8f69253367addf2ba106133bb6e077369a53066ea"
+}

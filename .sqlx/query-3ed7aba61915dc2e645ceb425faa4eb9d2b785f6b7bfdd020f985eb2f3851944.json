@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n      UPDATE scheduled_jobs\n      SET deleted_at = NOW()\n      WHERE cron_job_id = $1\n      ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3ed7aba61915dc2e645ceb425faa4eb9d2b785f6b7bfdd020f985eb2f3851944"
+}

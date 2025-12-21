@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n  SELECT\n    job.id,\n    job.region,\n    job.scheduled_at,\n    exe.success as \"success?\",\n    exe.executed_at as \"executed_at?\",\n    exe.response_error as \"response_error?\",\n    req.method,\n    req.url,\n    req.headers as req_headers,\n    req.body as req_body,\n    res.status as \"status?\",\n    res.headers as \"res_headers?\",\n    res.body as \"res_body?\",\n    job.timeout_ms,\n    job.max_retries,\n    job.max_response_bytes,\n    job.tenant_id,\n    job.one_off_job_id,\n    job.cron_job_id,\n    job.retry_for_id\n  FROM (\n    SELECT\n      *,\n      ROW_NUMBER() OVER (PARTITION BY\n        tenant_id,\n        one_off_job_id,\n        cron_job_id\n          ORDER BY\n            scheduled_at DESC\n        ) AS row_num\n    FROM scheduled_jobs\n    WHERE\n      (one_off_job_id = ANY($1)\n      OR cron_job_id = ANY($1))\n      AND ($2::text IS NULL OR tenant_id = $2)\n  ) job\n  INNER JOIN http_requests as req\n    ON req.id = job.request_id\n  LEFT JOIN job_executions exe\n    ON job.execution_id = exe.id\n  LEFT JOIN http_responses res\n    ON exe.response_id = res.id\n  WHERE\n    job.row_num <= $3\n  ",
+  "query": "\n      SELECT\n        job.id,\n        job.region,\n        job.scheduled_at,\n        exe.success as \"success?\",\n        exe.executed_at as \"executed_at?\",\n        exe.response_error as \"response_error?\",\n        req.method,\n        req.url,\n        req.headers as req_headers,\n        req.body as req_body,\n        res.status as \"status?\",\n        res.headers as \"res_headers?\",\n        res.body as \"res_body?\",\n        job.timeout_ms,\n        job.max_retries,\n        job.max_response_bytes,\n        job.tenant_id,\n        job.one_off_job_id,\n        job.cron_job_id,\n        job.retry_for_id\n      FROM scheduled_jobs as job\n      INNER JOIN http_requests as req\n        ON req.id = job.request_id\n      LEFT JOIN job_executions exe\n        ON job.execution_id = exe.id\n      LEFT JOIN http_responses res\n        ON exe.response_id = res.id\n      WHERE\n        job.deleted_at IS NULL\n        AND ($2::text IS NULL OR job.tenant_id = $2)\n        AND ($3::bool IS NULL OR\n          ($3 = true AND exe.id IS NOT NULL) OR\n          ($3 = false AND exe.id IS NULL))\n        AND ($4::text IS NULL OR job.id < $4)\n        AND ($5::bigint IS NULL OR job.scheduled_at >= to_timestamp($5))\n        AND ($6::bigint IS NULL OR job.scheduled_at <= to_timestamp($6))\n        AND ($7::text IS NULL OR job.one_off_job_id = $7)\n        AND ($8::text IS NULL OR job.cron_job_id = $8)\n      ORDER BY job.id DESC\n      LIMIT $1;\n      ",
   "describe": {
     "columns": [
       {
@@ -106,9 +106,14 @@
     ],
     "parameters": {
       "Left": [
-        "TextArray",
+        "Int8",
         "Text",
-        "Int8"
+        "Bool",
+        "Text",
+        "Int8",
+        "Int8",
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
@@ -134,5 +139,5 @@
       true
     ]
   },
-  "hash": "e1188025cbc7a955c75d781743ed062b2ebe31c027e56e7d29b5d129c3ca533b"
+  "hash": "01b273bac0a1dfe6f2c17902686007a5c452dd0b7cffbda4eaf93f0f3a1175b0"
 }

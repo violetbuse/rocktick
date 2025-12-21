@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n    INSERT INTO tenants\n      (id, tokens, max_tokens, increment, period, max_timeout, default_retries, max_max_response_bytes, max_request_bytes)\n    VALUES ($1, $2 ,$3, $4, $5, $6, $7, $8, $9) RETURNING *;\n    ",
+  "query": "\n      UPDATE tenants\n      SET\n        tokens = COALESCE($1, tokens),\n        max_tokens = COALESCE($2, max_tokens),\n        period = COALESCE($3, period),\n        increment = COALESCE($4, increment),\n        max_timeout = COALESCE($5, max_timeout),\n        default_retries = COALESCE($6, default_retries),\n        max_max_response_bytes = COALESCE($7, max_max_response_bytes),\n        max_request_bytes = COALESCE($8, max_request_bytes),\n        retain_for_days = COALESCE($9, retain_for_days)\n      WHERE id = $10 RETURNING *\n      ",
   "describe": {
     "columns": [
       {
@@ -52,19 +52,25 @@
         "ordinal": 9,
         "name": "max_request_bytes",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "retain_for_days",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
-        "Varchar",
-        "Int4",
         "Int4",
         "Int4",
         "Interval",
         "Int4",
         "Int4",
         "Int4",
-        "Int4"
+        "Int4",
+        "Int4",
+        "Int4",
+        "Text"
       ]
     },
     "nullable": [
@@ -77,8 +83,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "bd356fb50226d1bcfa720376eb12a686f1f4ecbcbb329446956c99f6746d6133"
+  "hash": "c3c20aa7d06f1baf99facafb51a3f04a698aafe606534af71e4ad17338997aab"
 }

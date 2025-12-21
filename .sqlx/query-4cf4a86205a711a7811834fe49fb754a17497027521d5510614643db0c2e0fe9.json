@@ -52,6 +52,11 @@
         "ordinal": 9,
         "name": "max_request_bytes",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "retain_for_days",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -60,6 +65,7 @@
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,

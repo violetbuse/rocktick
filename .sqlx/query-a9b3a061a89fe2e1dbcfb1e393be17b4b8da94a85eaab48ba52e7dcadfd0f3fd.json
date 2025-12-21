@@ -1,0 +1,102 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n      SELECT\n        job.id,\n        job.region,\n        job.tenant_id,\n        req.id as req_id,\n        req.method,\n        req.url,\n        req.headers,\n        req.body,\n        job.schedule,\n        job.timeout_ms,\n        job.max_retries,\n        job.max_response_bytes,\n        job.created_at,\n        job.error\n      FROM cron_jobs as job\n      INNER JOIN http_requests as req\n        ON req.id = job.request_id\n      WHERE\n        job.deleted_at IS NULL\n        AND ($2::text IS NULL OR job.tenant_id = $2)\n        AND ($3::text IS NULL OR job.id < $3)\n      ORDER BY job.id DESC\n      LIMIT $1;\n      ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "region",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "tenant_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "req_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "method",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "headers",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 7,
+        "name": "body",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "schedule",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "timeout_ms",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "max_retries",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "max_response_bytes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "error",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "a9b3a061a89fe2e1dbcfb1e393be17b4b8da94a85eaab48ba52e7dcadfd0f3fd"
+}

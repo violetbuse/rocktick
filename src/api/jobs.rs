@@ -16,6 +16,7 @@ struct IntermediateOneOffJob {
     id: String,
     region: String,
     tenant_id: Option<String>,
+    req_id: String,
     method: String,
     url: String,
     headers: Vec<String>,
@@ -242,6 +243,7 @@ async fn list_jobs(
         job.id,
         job.region,
         job.tenant_id,
+        req.id as req_id,
         req.method,
         req.url,
         req.headers,
@@ -255,7 +257,8 @@ async fn list_jobs(
       INNER JOIN http_requests as req
         ON req.id = job.request_id
       WHERE
-        ($2::text IS NULL OR job.tenant_id = $2)
+        job.deleted_at IS NULL
+        AND ($2::text IS NULL OR job.tenant_id = $2)
         AND ($3::text IS NULL OR job.id < $3)
       ORDER BY job.id DESC
       LIMIT $1;
@@ -267,11 +270,20 @@ async fn list_jobs(
     .fetch_all(&ctx.pool)
     .await?;
 
-    let job_ids = jobs.iter().map(|j| j.id.clone()).collect();
+    let job_ids: Vec<String> = jobs.iter().map(|j| j.id.clone()).collect();
 
     // dbg!(&job_ids);
 
-    let executions = executions::get_executions(job_ids, tenant_id, 3, &ctx.pool).await?;
+    let completed_executions =
+        executions::get_executions(job_ids.clone(), tenant_id.clone(), true, 3, &ctx.pool).await?;
+
+    let not_yet_executed =
+        executions::get_executions(job_ids.clone(), tenant_id.clone(), false, 2, &ctx.pool).await?;
+
+    let executions = completed_executions
+        .into_iter()
+        .chain(not_yet_executed.into_iter())
+        .collect::<Vec<_>>();
 
     // dbg!(&executions);
 
@@ -372,7 +384,7 @@ async fn update_job(
         job AS (
           SELECT *
           FROM one_off_jobs
-          WHERE id = $1
+          WHERE deleted_at IS NULL AND id = $1
             AND ($2::text IS NULL OR tenant_id = $2)
           FOR UPDATE
         ),
@@ -470,6 +482,7 @@ async fn update_job(
         job.id,
         job.region,
         job.tenant_id,
+        req.id as req_id,
         req.method,
         req.url,
         req.headers,
@@ -490,8 +503,18 @@ async fn update_job(
     .fetch_one(&mut *txn)
     .await?;
 
-    let executions =
-        executions::get_executions(vec![job_id.clone()], tenant_id, 5, &mut *txn).await?;
+    let completed_executions =
+        executions::get_executions(vec![job_id.clone()], tenant_id.clone(), true, 5, &mut *txn)
+            .await?;
+
+    let not_yet_executed =
+        executions::get_executions(vec![job_id.clone()], tenant_id.clone(), false, 2, &mut *txn)
+            .await?;
+
+    let executions = completed_executions
+        .into_iter()
+        .chain(not_yet_executed.into_iter())
+        .collect::<Vec<_>>();
 
     let job = new_job.to_one_off_job(&executions);
 
@@ -520,6 +543,7 @@ async fn get_job(
       job.id,
       job.region,
       job.tenant_id,
+      req.id as req_id,
       req.method,
       req.url,
       req.headers,
@@ -533,7 +557,8 @@ async fn get_job(
     INNER JOIN http_requests as req
       ON req.id = job.request_id
     WHERE
-      job.id = $1 AND
+      job.deleted_at IS NULL
+      AND job.id = $1 AND
       ($2::text IS NULL OR job.tenant_id = $2);
     "#,
         job_id.clone(),
@@ -546,15 +571,148 @@ async fn get_job(
         return Err(ApiError::not_found());
     }
 
-    let executions = executions::get_executions(vec![job_id], tenant_id, 7, &ctx.pool).await?;
+    let completed_executions =
+        executions::get_executions(vec![job_id.clone()], tenant_id.clone(), true, 5, &ctx.pool)
+            .await?;
+    let not_yet_executed =
+        executions::get_executions(vec![job_id.clone()], tenant_id.clone(), false, 2, &ctx.pool)
+            .await?;
+
+    let executions = completed_executions
+        .into_iter()
+        .chain(not_yet_executed.into_iter())
+        .collect::<Vec<_>>();
 
     let job = job.unwrap().to_one_off_job(&executions);
 
     Ok(job)
 }
 
+#[utoipa::path(
+  delete,
+  path = "/api/jobs/{job_id}",
+  params(("job_id", description = "Id of the job")),
+  responses(
+    (status = 200, description = "Job deleted", body = OneOffJob),
+    (status = "4XX", description = "Job not found", body = ApiError),
+    (status = "5XX", description = "Invalid request", body = ApiError)),
+  tag = "one off jobs"
+)]
+async fn delete_job(
+    State(ctx): State<Context>,
+    Path(job_id): Path<String>,
+    TenantId(tenant_id): TenantId,
+) -> Result<OneOffJob, ApiError> {
+    let mut txn = ctx.pool.begin().await?;
+    let tenant = if let Some(tenant_id) = tenant_id.clone() {
+        sqlx::query!("SELECT * FROM tenants WHERE id = $1", tenant_id)
+            .fetch_optional(&mut *txn)
+            .await?
+    } else {
+        None
+    };
+
+    if tenant_id.is_some() && tenant.is_none() {
+        return Err(ApiError::bad_request(Some("Invalid tenant id")));
+    }
+
+    let existing = sqlx::query_as!(
+        IntermediateOneOffJob,
+        r#"
+      SELECT
+        job.id,
+        job.region,
+        job.tenant_id,
+        req.id as req_id,
+        req.method,
+        req.url,
+        req.headers,
+        req.body,
+        job.execute_at,
+        job.timeout_ms,
+        job.max_retries,
+        job.max_response_bytes,
+        job.created_at
+      FROM one_off_jobs as job
+      INNER JOIN http_requests as req
+        ON req.id = job.request_id
+      WHERE
+        job.deleted_at IS NULL
+        AND job.id = $1 AND
+        ($2::text IS NULL OR job.tenant_id = $2)
+      FOR UPDATE
+      "#,
+        job_id.clone(),
+        tenant_id
+    )
+    .fetch_optional(&mut *txn)
+    .await?;
+
+    if existing.is_none() {
+        return Err(ApiError::not_found());
+    }
+
+    let executions =
+        executions::get_executions(vec![job_id.clone()], tenant_id, true, 7, &mut *txn).await?;
+
+    let existing = existing.unwrap();
+
+    let pre_delete_job = existing.to_one_off_job(&executions);
+
+    sqlx::query!(
+        r#"
+      UPDATE one_off_jobs
+      SET deleted_at = NOW()
+      WHERE id = $1
+      "#,
+        job_id.clone()
+    )
+    .execute(&mut *txn)
+    .await?;
+
+    sqlx::query!(
+        r#"
+      DELETE FROM scheduled_jobs
+      WHERE one_off_job_id = $1
+        AND lock_nonce IS NULL
+        AND execution_id IS NULL
+      "#,
+        job_id.clone()
+    )
+    .execute(&mut *txn)
+    .await?;
+
+    sqlx::query!(
+        r#"
+      UPDATE scheduled_jobs
+      SET deleted_at = NOW()
+      WHERE one_off_job_id = $1
+      "#,
+        job_id.clone()
+    )
+    .execute(&mut *txn)
+    .await?;
+
+    sqlx::query!(
+        r#"
+      UPDATE http_requests
+      SET
+        body = '<deleted>',
+        headers = '{}'
+      WHERE id = $1
+      "#,
+        existing.req_id
+    )
+    .execute(&mut *txn)
+    .await?;
+
+    txn.commit().await?;
+
+    Ok(pre_delete_job)
+}
+
 pub fn init_router() -> OpenApiRouter<Context> {
     OpenApiRouter::new()
         .routes(routes!(create_job, list_jobs))
-        .routes(routes!(update_job, get_job))
+        .routes(routes!(update_job, get_job, delete_job))
 }

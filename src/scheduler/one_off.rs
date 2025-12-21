@@ -29,6 +29,7 @@ impl Scheduler for OneOffScheduler {
       scheduled_jobs as scheduled
       ON job.id = scheduled.one_off_job_id
     WHERE scheduled.id IS NULL
+      AND job.deleted_at IS NULL
     LIMIT 1 FOR UPDATE OF job SKIP LOCKED;
     "#
         )

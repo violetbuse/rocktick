@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n          job.id as id,\n          exec.request_id as req_id,\n          exec.response_id as res_id\n        FROM scheduled_jobs job\n        JOIN job_executions exec\n          ON exec.id = job.execution_id\n        JOIN tenants tenant\n          ON tenant.id = job.tenant_id\n        WHERE\n          job.execution_id IS NOT NULL AND\n          job.tenant_id IS NOT NULL AND\n          job.deleted_at IS NULL AND\n          exec.executed_at < now() - (tenant.retain_for_days * interval '1 day')\n        LIMIT 1 FOR UPDATE SKIP LOCKED;\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "req_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "res_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "f068c3e188b7ff921175779af9b9e80686b266a2444fa0556af8e30c9fcca262"
+}

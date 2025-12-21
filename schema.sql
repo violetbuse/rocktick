@@ -9,7 +9,8 @@ CREATE TABLE tenants (
   max_timeout INTEGER NOT NULL,
   default_retries INTEGER NOT NULL,
   max_max_response_bytes INTEGER NOT NULL,
-  max_request_bytes INTEGER NOT NULL
+  max_request_bytes INTEGER NOT NULL,
+  retain_for_days INTEGER NOT NULL
 );
 
 CREATE TABLE http_requests (
@@ -36,7 +37,8 @@ CREATE TABLE one_off_jobs (
   timeout_ms INTEGER,
   max_retries INTEGER NOT NULL,
   max_response_bytes INTEGER,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
 );
 
 CREATE TABLE cron_jobs (
@@ -50,7 +52,8 @@ CREATE TABLE cron_jobs (
   max_response_bytes INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   start_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  error TEXT
+  error TEXT,
+  deleted_at TIMESTAMPTZ
 );
 
 CREATE TABLE job_executions (
@@ -76,5 +79,6 @@ CREATE TABLE scheduled_jobs (
   execution_id VARCHAR(255) UNIQUE REFERENCES job_executions(id),
   timeout_ms INTEGER,
   max_retries INTEGER NOT NULL,
-  max_response_bytes INTEGER
+  max_response_bytes INTEGER,
+  deleted_at TIMESTAMPTZ
 );

@@ -18,6 +18,7 @@ struct IntermediateCronJob {
     id: String,
     region: String,
     tenant_id: Option<String>,
+    req_id: String,
     method: String,
     url: String,
     headers: Vec<String>,
@@ -252,6 +253,7 @@ async fn list_cron_jobs(
         job.id,
         job.region,
         job.tenant_id,
+        req.id as req_id,
         req.method,
         req.url,
         req.headers,
@@ -266,7 +268,8 @@ async fn list_cron_jobs(
       INNER JOIN http_requests as req
         ON req.id = job.request_id
       WHERE
-        ($2::text IS NULL OR job.tenant_id = $2)
+        job.deleted_at IS NULL
+        AND ($2::text IS NULL OR job.tenant_id = $2)
         AND ($3::text IS NULL OR job.id < $3)
       ORDER BY job.id DESC
       LIMIT $1;
@@ -280,7 +283,15 @@ async fn list_cron_jobs(
 
     let job_ids: Vec<String> = jobs.iter().map(|j| j.id.clone()).collect();
 
-    let executions = executions::get_executions(job_ids, tenant_id, 3, &ctx.pool).await?;
+    let completed_executions =
+        executions::get_executions(job_ids.clone(), tenant_id.clone(), true, 5, &ctx.pool).await?;
+    let not_yet_executed =
+        executions::get_executions(job_ids.clone(), tenant_id.clone(), false, 2, &ctx.pool).await?;
+
+    let executions = completed_executions
+        .into_iter()
+        .chain(not_yet_executed.into_iter())
+        .collect::<Vec<_>>();
 
     let jobs: Vec<CronJob> = jobs.iter().map(|j| j.to_cron_job(&executions)).collect();
 
@@ -393,7 +404,7 @@ async fn update_cron_job(
         job.max_response_bytes,
         job.request_id as req_id
       FROM cron_jobs as job
-      WHERE job.id = $1 AND ($2::text IS NULL OR job.tenant_id = $2)
+      WHERE job.deleted_at IS NULL AND job.id = $1 AND ($2::text IS NULL OR job.tenant_id = $2)
       FOR UPDATE
       "#,
         job_id.clone(),
@@ -468,6 +479,7 @@ async fn update_cron_job(
         cron_jobs.id,
         cron_jobs.region,
         cron_jobs.tenant_id,
+        req.id as req_id,
         req.method,
         req.url,
         req.headers,
@@ -489,14 +501,148 @@ async fn update_cron_job(
     .fetch_one(&mut *txn)
     .await?;
 
-    let executions =
-        executions::get_executions(vec![job_id.clone()], tenant_id.clone(), 5, &mut *txn).await?;
+    let completed_executions =
+        executions::get_executions(vec![job_id.clone()], tenant_id.clone(), true, 5, &mut *txn)
+            .await?;
+
+    let not_yet_executed =
+        executions::get_executions(vec![job_id.clone()], tenant_id.clone(), false, 2, &mut *txn)
+            .await?;
+
+    let executions = completed_executions
+        .into_iter()
+        .chain(not_yet_executed.into_iter())
+        .collect::<Vec<_>>();
 
     txn.commit().await?;
 
     let job = new_job.to_cron_job(&executions);
 
     Ok(job)
+}
+
+#[utoipa::path(
+  delete,
+  path = "/api/cron/{job_id}",
+  params(("job_id", description = "Id of the cron job")),
+  responses(
+    (status = 200, description = "Cron job found", body = CronJob),
+    (status = "4XX", description = "Job not found", body = ApiError),
+    (status = "5XX", description = "Invalid request", body = ApiError)),
+  tag = "cron jobs"
+)]
+async fn delete_cron_job(
+    State(ctx): State<Context>,
+    Path(job_id): Path<String>,
+    TenantId(tenant_id): TenantId,
+) -> Result<CronJob, ApiError> {
+    let mut txn = ctx.pool.begin().await?;
+    let tenant = if let Some(tenant_id) = tenant_id.clone() {
+        sqlx::query!("SELECT * FROM tenants WHERE id = $1", tenant_id)
+            .fetch_optional(&mut *txn)
+            .await?
+    } else {
+        None
+    };
+
+    if tenant_id.is_some() && tenant.is_none() {
+        return Err(ApiError::bad_request(Some("Invalid tenant id")));
+    }
+
+    let existing = sqlx::query_as!(
+        IntermediateCronJob,
+        r#"
+  SELECT
+    job.id,
+    job.region,
+    job.tenant_id,
+    req.id as req_id,
+    req.method,
+    req.url,
+    req.headers,
+    req.body,
+    job.schedule,
+    job.timeout_ms,
+    job.max_retries,
+    job.max_response_bytes,
+    job.created_at,
+    job.error
+  FROM cron_jobs as job
+  INNER JOIN http_requests as req
+    ON req.id = job.request_id
+  WHERE
+    job.deleted_at IS NULL
+    AND job.id = $1 AND
+    ($2::text IS NULL OR job.tenant_id = $2)
+  FOR UPDATE
+  "#,
+        job_id.clone(),
+        tenant_id
+    )
+    .fetch_optional(&ctx.pool)
+    .await?;
+
+    if existing.is_none() {
+        return Err(ApiError::not_found());
+    }
+
+    let executions =
+        executions::get_executions(vec![job_id.clone()], tenant_id, true, 7, &mut *txn).await?;
+
+    let existing = existing.unwrap();
+
+    let pre_delete_job = existing.to_cron_job(&executions);
+
+    sqlx::query!(
+        r#"
+      UPDATE cron_jobs
+      SET deleted_at = NOW()
+      WHERE id = $1
+      "#,
+        job_id.clone()
+    )
+    .execute(&mut *txn)
+    .await?;
+
+    sqlx::query!(
+        r#"
+      DELETE FROM scheduled_jobs
+      WHERE cron_job_id = $1
+        AND lock_nonce IS NULL
+        AND execution_id IS NULL
+      "#,
+        job_id.clone()
+    )
+    .execute(&mut *txn)
+    .await?;
+
+    sqlx::query!(
+        r#"
+      UPDATE scheduled_jobs
+      SET deleted_at = NOW()
+      WHERE cron_job_id = $1
+      "#,
+        job_id.clone()
+    )
+    .execute(&mut *txn)
+    .await?;
+
+    sqlx::query!(
+        r#"
+      UPDATE http_requests
+      SET
+        body = '<deleted>',
+        headers = '{}'
+      WHERE id = $1
+      "#,
+        existing.req_id
+    )
+    .execute(&mut *txn)
+    .await?;
+
+    txn.commit().await?;
+
+    Ok(pre_delete_job)
 }
 
 #[utoipa::path(
@@ -521,6 +667,7 @@ async fn get_cron_job(
       job.id,
       job.region,
       job.tenant_id,
+      req.id as req_id,
       req.method,
       req.url,
       req.headers,
@@ -535,7 +682,8 @@ async fn get_cron_job(
     INNER JOIN http_requests as req
       ON req.id = job.request_id
     WHERE
-      job.id = $1 AND
+      job.deleted_at IS NULL
+      AND job.id = $1 AND
       ($2::text IS NULL OR job.tenant_id = $2);
     "#,
         job_id.clone(),
@@ -548,7 +696,17 @@ async fn get_cron_job(
         return Err(ApiError::not_found());
     }
 
-    let executions = executions::get_executions(vec![job_id], tenant_id, 7, &ctx.pool).await?;
+    let completed_executions =
+        executions::get_executions(vec![job_id.clone()], tenant_id.clone(), true, 5, &ctx.pool)
+            .await?;
+    let not_yet_executed =
+        executions::get_executions(vec![job_id.clone()], tenant_id.clone(), false, 2, &ctx.pool)
+            .await?;
+
+    let executions = completed_executions
+        .into_iter()
+        .chain(not_yet_executed.into_iter())
+        .collect::<Vec<_>>();
 
     let job = job.unwrap().to_cron_job(&executions);
 
@@ -558,5 +716,5 @@ async fn get_cron_job(
 pub fn init_router() -> OpenApiRouter<Context> {
     OpenApiRouter::new()
         .routes(routes!(create_cron_job, list_cron_jobs))
-        .routes(routes!(update_cron_job, get_cron_job))
+        .routes(routes!(update_cron_job, get_cron_job, delete_cron_job))
 }

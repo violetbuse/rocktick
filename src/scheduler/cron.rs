@@ -48,7 +48,8 @@ impl Scheduler for CronScheduler {
             ON job.id = counts.cron_id
           WHERE
             COALESCE(counts.unexecuted_count, 0) < 60 AND
-            job.error IS NULL
+            job.error IS NULL AND
+            job.deleted_at IS NULL
           LIMIT 1 FOR UPDATE OF job SKIP LOCKED;
           "#
         )

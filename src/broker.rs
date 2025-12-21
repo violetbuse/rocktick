@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use chrono::DateTime;
-use nanoid::nanoid;
 use sqlx::{Pool, Postgres};
 use tokio::select;
 use tokio::sync::mpsc;
@@ -10,8 +9,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 use tonic::transport::Server;
 
-use crate::BrokerOptions;
 use crate::broker::broker_server::{Broker as BrokerTrait, BrokerServer};
+use crate::{BrokerOptions, id};
 
 tonic::include_proto!("broker");
 
@@ -166,7 +165,7 @@ impl BrokerTrait for Broker {
                             .fetch_one(&mut *tx)
                             .await?;
 
-                            let request_id = format!("request_{}", nanoid!());
+                            let request_id = id::generate("request");
                             let req_headers: Vec<String> = execution
                                 .req_headers
                                 .iter()
@@ -192,7 +191,7 @@ impl BrokerTrait for Broker {
                             let mut response_id = None;
 
                             if let Some(response) = execution.response {
-                                let res_id = format!("response_{}", nanoid!());
+                                let res_id = id::generate("response");
                                 response_id = Some(res_id.clone());
 
                                 let headers: Vec<String> = response
@@ -217,7 +216,7 @@ impl BrokerTrait for Broker {
                                 .await?;
                             }
 
-                            let execution_id = format!("execution_{}", nanoid!());
+                            let execution_id = id::generate("execution");
                             let executed_at = DateTime::from_timestamp_secs(execution.executed_at);
 
                             sqlx::query!(

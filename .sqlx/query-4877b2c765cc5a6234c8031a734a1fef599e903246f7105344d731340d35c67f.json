@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n      UPDATE scheduled_jobs\n      SET deleted_at = NOW()\n      WHERE one_off_job_id = $1\n      ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4877b2c765cc5a6234c8031a734a1fef599e903246f7105344d731340d35c67f"
+}

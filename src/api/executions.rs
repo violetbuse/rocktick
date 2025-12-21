@@ -144,7 +144,8 @@ async fn list_executions(
       LEFT JOIN http_responses res
         ON exe.response_id = res.id
       WHERE
-        ($2::text IS NULL OR job.tenant_id = $2)
+        job.deleted_at IS NULL
+        AND ($2::text IS NULL OR job.tenant_id = $2)
         AND ($3::bool IS NULL OR
           ($3 = true AND exe.id IS NOT NULL) OR
           ($3 = false AND exe.id IS NULL))
@@ -232,8 +233,8 @@ async fn get_execution(
     LEFT JOIN http_responses res
       ON exe.response_id = res.id
     WHERE
-      job.id = $1 AND
-      ($2::text IS NULL OR job.tenant_id = $2)
+      job.id = $1 AND job.deleted_at IS NULL
+      AND ($2::text IS NULL OR job.tenant_id = $2)
     "#,
         execution_id,
         tenant_id
@@ -253,6 +254,7 @@ async fn get_execution(
 pub async fn get_executions<'a, E>(
     jobs: Vec<String>,
     tenant_id: Option<String>,
+    completed: bool,
     count_per: i64,
     executor: E,
 ) -> Result<Vec<Execution>, sqlx::Error>
@@ -285,19 +287,26 @@ where
     job.retry_for_id
   FROM (
     SELECT
-      *,
+      scheduled_jobs.*,
       ROW_NUMBER() OVER (PARTITION BY
         tenant_id,
         one_off_job_id,
         cron_job_id
           ORDER BY
-            scheduled_at DESC
+            EXTRACT(EPOCH FROM scheduled_at)::bigint
+            * (CASE WHEN $3 = true THEN 1 ELSE -1 END)
+            DESC
         ) AS row_num
     FROM scheduled_jobs
+    LEFT JOIN job_executions exe
+      ON execution_id = exe.id
     WHERE
-      (one_off_job_id = ANY($1)
-      OR cron_job_id = ANY($1))
+      deleted_at IS NULL
+      AND (one_off_job_id = ANY($1)
+        OR cron_job_id = ANY($1))
       AND ($2::text IS NULL OR tenant_id = $2)
+      AND (($3 = true AND exe.id IS NOT NULL) OR
+          ($3 = false AND exe.id IS NULL))
   ) job
   INNER JOIN http_requests as req
     ON req.id = job.request_id
@@ -306,10 +315,11 @@ where
   LEFT JOIN http_responses res
     ON exe.response_id = res.id
   WHERE
-    job.row_num <= $3
+    job.row_num <= $4
   "#,
         &jobs,
         tenant_id,
+        completed,
         count_per
     )
     .fetch_all(executor)

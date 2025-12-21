@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n      UPDATE one_off_jobs\n      SET deleted_at = NOW()\n      WHERE id = $1\n      ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3986426cad9536fffe9e6eb77b917c722a7370a0833d78621d32582c79f426d6"
+}

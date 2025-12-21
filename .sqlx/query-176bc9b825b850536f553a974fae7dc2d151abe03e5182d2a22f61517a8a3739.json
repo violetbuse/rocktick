@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n      SELECT\n        job.id,\n        job.region,\n        job.schedule,\n        job.timeout_ms,\n        job.max_retries,\n        job.max_response_bytes,\n        job.request_id as req_id\n      FROM cron_jobs as job\n      WHERE job.id = $1 AND ($2::text IS NULL OR job.tenant_id = $2)\n      FOR UPDATE\n      ",
+  "query": "\n      SELECT\n        job.id,\n        job.region,\n        job.schedule,\n        job.timeout_ms,\n        job.max_retries,\n        job.max_response_bytes,\n        job.request_id as req_id\n      FROM cron_jobs as job\n      WHERE job.deleted_at IS NULL AND job.id = $1 AND ($2::text IS NULL OR job.tenant_id = $2)\n      FOR UPDATE\n      ",
   "describe": {
     "columns": [
       {
@@ -55,5 +55,5 @@
       false
     ]
   },
-  "hash": "926ea7375e4a19eb13020e32c24df18a30cbfabdb806146b612110fa5b90a258"
+  "hash": "176bc9b825b850536f553a974fae7dc2d151abe03e5182d2a22f61517a8a3739"
 }
