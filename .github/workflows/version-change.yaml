@@ -1,5 +1,7 @@
 name: Tag on Cargo Version Change
 
+run-name: Tag on Cargo Version Change - ${{ github.event.head_commit.message }}
+
 on:
   push:
     branches:
@@ -14,6 +16,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Get current version from Cargo.toml
         id: cargo
@@ -21,24 +25,23 @@ jobs:
           version=$(grep '^version' Cargo.toml | head -n1 | awk -F\" '{print $2}')
           echo "cargo_version=$version" >> $GITHUB_ENV
 
-      - name: Get previous version from master
-        id: prev
-        run: |
-          git fetch origin master
-          git checkout origin/master~1 -- Cargo.toml
-          prev_version=$(grep '^version' Cargo.toml | head -n1 | awk -F\" '{print $2}')
-          echo "prev_version=$prev_version" >> $GITHUB_ENV
-          git checkout - # restore current branch
-
-      - name: Compare versions
+      - name: Compare Cargo.toml version
         id: compare
         run: |
-          if [ "$cargo_version" = "$prev_version" ]; then
-          echo "Version has not changed."
-          exit 0
-          else
-            echo "Version changed from $prev_version to $cargo_version"
+          git fetch origin master
+          prev_version=$(git show origin/master:Cargo.toml | grep '^version' | head -n1 | awk -F\" '{print $2}')
+          curr_version=$(grep '^version' Cargo.toml | head -n1 | awk -F\" '{print $2}')
+
+          echo "Previous version: $prev_version"
+          echo "Current version: $curr_version"
+
+          if [ "$curr_version" = "$prev_version" ]; then
+            echo "Version has not changed."
+            exit 0
           fi
+
+          echo "Version changed. Tagging v$curr_version"
+          echo "cargo_version=$curr_version" >> $GITHUB_ENV
 
       - name: Create git tag
         run: |
