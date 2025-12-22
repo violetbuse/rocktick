@@ -115,6 +115,10 @@ jobs:
           cargo build --release --target ${{ matrix.target }}
         shell: bash
 
+      - name: Install zip
+        if: runner.os == 'Windows'
+        run: choco install zip
+
       - name: Prepare artifact
         run: |
           mkdir dist
