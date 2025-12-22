@@ -57,7 +57,11 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
           git tag -a "$TAG" -m "Release $TAG"
-          git push https://$PAT_TOKEN@github.com/${{ github.repository }} "$TAG"
+
+          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/violetbuse/rocktick.git
+
+          git push origin "$TAG"
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
