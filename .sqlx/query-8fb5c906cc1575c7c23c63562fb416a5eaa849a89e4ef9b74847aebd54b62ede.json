@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH unexecuted_job_stats AS (\n            SELECT\n              sj.cron_job_id as cron_id,\n              COUNT(sj.id) AS unexecuted_count,\n              MAX(sj.scheduled_at) AS max_scheduled_at\n            FROM\n              scheduled_jobs as sj\n            WHERE\n              sj.execution_id IS NULL\n            GROUP BY\n              sj.cron_job_id\n          )\n          SELECT\n            job.id as id,\n            job.region as region,\n            job.schedule as schedule,\n            job.timeout_ms as timeout_ms,\n            job.max_retries as max_retries,\n            job.max_response_bytes as max_response_bytes,\n            job.created_at as created_at,\n            job.start_at as start_at,\n            job.request_id as request_id,\n            job.tenant_id as tenant_id\n          FROM\n            cron_jobs as job\n          LEFT JOIN\n            unexecuted_job_stats as stats\n            ON job.id = stats.cron_id\n          WHERE\n            COALESCE(stats.unexecuted_count, 0) < 60\n            AND (\n              stats.max_scheduled_at IS NULL\n              OR stats.max_scheduled_at <= now() + interval '10 minutes'\n            )\n            AND job.error IS NULL\n            AND job.deleted_at IS NULL\n          LIMIT 1 FOR UPDATE OF job SKIP LOCKED;\n          ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "region",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "schedule",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "timeout_ms",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "max_retries",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "max_response_bytes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "start_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "request_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "tenant_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "8fb5c906cc1575c7c23c63562fb416a5eaa849a89e4ef9b74847aebd54b62ede"
+}

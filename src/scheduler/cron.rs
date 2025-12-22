@@ -19,10 +19,11 @@ impl Scheduler for CronScheduler {
 
         let cron_job = sqlx::query!(
             r#"
-          WITH unexecuted_job_counts AS (
+          WITH unexecuted_job_stats AS (
             SELECT
               sj.cron_job_id as cron_id,
-              COUNT(sj.id) AS unexecuted_count
+              COUNT(sj.id) AS unexecuted_count,
+              MAX(sj.scheduled_at) AS max_scheduled_at
             FROM
               scheduled_jobs as sj
             WHERE
@@ -44,12 +45,16 @@ impl Scheduler for CronScheduler {
           FROM
             cron_jobs as job
           LEFT JOIN
-            unexecuted_job_counts as counts
-            ON job.id = counts.cron_id
+            unexecuted_job_stats as stats
+            ON job.id = stats.cron_id
           WHERE
-            COALESCE(counts.unexecuted_count, 0) < 60 AND
-            job.error IS NULL AND
-            job.deleted_at IS NULL
+            COALESCE(stats.unexecuted_count, 0) < 60
+            AND (
+              stats.max_scheduled_at IS NULL
+              OR stats.max_scheduled_at <= now() + interval '10 minutes'
+            )
+            AND job.error IS NULL
+            AND job.deleted_at IS NULL
           LIMIT 1 FOR UPDATE OF job SKIP LOCKED;
           "#
         )
@@ -106,15 +111,22 @@ impl Scheduler for CronScheduler {
         let schedule = schedule.unwrap();
         let mut count = 0;
         let mut times = Vec::new();
+        let now = Utc::now();
+
         for datetime in schedule
             .iter_from(start_time, croner::Direction::Forward)
-            .take(100)
+            .take(70)
         {
             count += 1;
             times.push(datetime);
 
-            let since_start = datetime - start_time;
-            if since_start > TimeDelta::seconds(90) && count > 10 {
+            let since_now = datetime - now;
+
+            if since_now > TimeDelta::minutes(15) {
+                break;
+            }
+
+            if count > 60 {
                 break;
             }
         }
