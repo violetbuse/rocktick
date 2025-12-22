@@ -39,6 +39,10 @@ jobs:
             target: x86_64-pc-windows-msvc
 
     steps:
+      - name: Set Version
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -114,10 +118,18 @@ jobs:
       - name: Prepare artifact
         run: |
           mkdir dist
+          FILE_NAME="${{ env.BIN_NAME }}-${{ env.VERSION }}-${{ matrix.name }}"
+          BIN_NAME="${{ env.BIN_NAME }}"
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            cp target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe dist/${{ env.BIN_NAME }}-${{ matrix.name }}.exe
+            cp target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe $BIN_NAME.exe
+            zip -j dist/$FILE_NAME.zip $BIN_NAME.exe
+            sha256sum dist/$FILE_NAME.zip > dist/$FILE_NAME.zip.sha256
+            rm $BIN_NAME.exe
           else
-            cp target/${{ matrix.target }}/release/${{ env.BIN_NAME }} dist/${{ env.BIN_NAME }}-${{ matrix.name }}
+            cp target/${{ matrix.target }}/release/${{ env.BIN_NAME }} $BIN_NAME
+            tar -czf dist/$FILE_NAME.tar.gz $BIN_NAME
+            sha256sum dist/$FILE_NAME.tar.gz > dist/$FILE_NAME.tar.gz.sha256
+            rm $BIN_NAME
           fi
         shell: bash
 
