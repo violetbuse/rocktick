@@ -57,6 +57,16 @@
         "ordinal": 10,
         "name": "retain_for_days",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "max_retries",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "max_delay_days",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -65,6 +75,8 @@
       ]
     },
     "nullable": [
+      false,
+      false,
       false,
       false,
       false,

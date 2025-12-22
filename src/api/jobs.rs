@@ -1,5 +1,5 @@
 use axum::extract::{Path, Query, State};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
@@ -131,6 +131,16 @@ async fn create_job(
         ))));
     }
 
+    if let Some(input_max_retries) = create_opts.max_retries
+        && let Some(tenant) = &tenant
+        && input_max_retries > tenant.max_retries
+    {
+        return Err(ApiError::bad_request(Some(&format!(
+            "Your max retries of {input_max_retries} is higher than your limit of {}",
+            tenant.max_retries
+        ))));
+    }
+
     if let Some(input_max_response_bytes) = create_opts.max_response_bytes
         && let Some(tenant) = &tenant
         && input_max_response_bytes > tenant.max_max_response_bytes
@@ -149,6 +159,23 @@ async fn create_job(
             "Your request body of {} bytes is higher than your limit of {}",
             body_text.len(),
             tenant.max_request_bytes
+        ))));
+    }
+
+    let scheduled_for = DateTime::from_timestamp_secs(create_opts.execute_at).ok_or(
+        ApiError::bad_request(Some(&format!("Invalid time {}", create_opts.execute_at))),
+    )?;
+    let time_until = scheduled_for - Utc::now();
+
+    if let Some(tenant) = &tenant
+        && time_until > Duration::days(tenant.max_delay_days as i64)
+    {
+        let over_by = time_until - Duration::days(tenant.max_delay_days as i64);
+        return Err(ApiError::bad_request(Some(&format!(
+            "Your request is scheduled {} days in the future, which is higher than your limit of {} days by {} seconds",
+            time_until.num_days(),
+            tenant.max_delay_days,
+            over_by.num_seconds()
         ))));
     }
 
@@ -357,6 +384,16 @@ async fn update_job(
         ))));
     }
 
+    if let Some(input_max_retries) = update_opts.max_retries
+        && let Some(tenant) = &tenant
+        && input_max_retries > tenant.max_retries
+    {
+        return Err(ApiError::bad_request(Some(&format!(
+            "Your max retries of {input_max_retries} is higher than your limit of {}",
+            tenant.max_retries
+        ))));
+    }
+
     if let Some(input_max_response_bytes) = update_opts.max_response_bytes
         && let Some(tenant) = &tenant
         && input_max_response_bytes > tenant.max_max_response_bytes
@@ -365,6 +402,25 @@ async fn update_job(
             "Your max response bytes of {input_max_response_bytes} is higher than your limit of {}",
             tenant.max_max_response_bytes
         ))));
+    }
+
+    if let Some(input_scheduled_for) = update_opts.execute_at {
+        let scheduled_for = DateTime::from_timestamp_secs(input_scheduled_for).ok_or(
+            ApiError::bad_request(Some(&format!("Invalid time {}", input_scheduled_for))),
+        )?;
+        let time_until = scheduled_for - Utc::now();
+
+        if let Some(tenant) = &tenant
+            && time_until > Duration::days(tenant.max_delay_days as i64)
+        {
+            let over_by = time_until - Duration::days(tenant.max_delay_days as i64);
+            return Err(ApiError::bad_request(Some(&format!(
+                "Your request is scheduled {} days in the future, which is higher than your limit of {} days by {} seconds",
+                time_until.num_days(),
+                tenant.max_delay_days,
+                over_by.num_seconds()
+            ))));
+        }
     }
 
     if let Some(body_text) = update_opts.request.as_ref().and_then(|r| r.body.clone())

@@ -1,4 +1,4 @@
-h1:1M7si1Go5LGo2J/rH7tR3COdHEAsWaICeeCtSYxTaQE=
+h1:Cvo69e7mhwoLu1oweXRWnqHKgiAs33QJRlU6HuFYW+A=
 20251203210042_initialized_project.sql h1:JphUmqibBPSs2wG6eWQFyijH8UzApjfiUnyUxAq1WuM=
 20251204091639_add_url_to_request.sql h1:wDFdyCr7r9hqY5BlH+yu07/iFFVKpmueT1gybTzSnSI=
 20251204091857_add_scheduled_stuff.sql h1:Ykvy8wTbx7hQmdn00SC/XiAllJfsTxEX1XceqrOMKLc=
@@ -30,3 +30,7 @@ h1:1M7si1Go5LGo2J/rH7tR3COdHEAsWaICeeCtSYxTaQE=
 20251209141401_added_a_tenant_max_request_bytes.sql h1:By/deEOKI4i1Dlau8rtdtR25DZLlNjnjY4mIXfweRys=
 20251219182250_add_deleted_at_column.sql h1:gewRqZUW7/tk9y/BPe9pWii2iRoue7XW1RWrpzX1dHA=
 20251221192950_add_response_retation.sql h1:qHlMyUk/A5S7HFF1lXO3eGR1M4zqPOrDBA6keR5WSbQ=
+20251222104442_add_max_retries.sql h1:/H3ukfTp2VqvooISft65qxx1vr67jGhtbGw8BRdWuww=
+20251222104456_remove_max_retries_default.sql h1:JI0UPZ0exfjBFCHwXVULAQvJOusDj+wgGRh/e7IcykQ=
+20251222105133_add_max_delay_days.sql h1:7SygAJGtVwKpGcJ80yYqDfcTJDhP1hzuS+N2JyAUR0c=
+20251222105155_remove_max_delay_days_default.sql h1:5tgv1jPLahJScg/w4LWWZqMPyFWypjwOSDms/k0mjSo=

@@ -19,9 +19,11 @@ struct CreateTenant {
     tok_per_day: i32,
     max_timeout: i32,
     default_retries: i32,
+    max_retries: i32,
     max_max_response_bytes: i32,
     max_request_bytes: i32,
     retain_for_days: i32,
+    max_delay_days: i32,
 }
 
 async fn create_tenant(
@@ -39,8 +41,8 @@ async fn create_tenant(
     let new_tenant = sqlx::query!(
         r#"
     INSERT INTO tenants
-      (id, tokens, max_tokens, increment, period, max_timeout, default_retries, max_max_response_bytes, max_request_bytes, retain_for_days)
-    VALUES ($1, $2 ,$3, $4, $5, $6, $7, $8, $9, $10) RETURNING *;
+      (id, tokens, max_tokens, increment, period, max_timeout, default_retries, max_retries, max_max_response_bytes, max_request_bytes, retain_for_days, max_delay_days)
+    VALUES ($1, $2 ,$3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *;
     "#,
         new_id,
         starting_tokens,
@@ -49,9 +51,11 @@ async fn create_tenant(
         period,
         create_opts.max_timeout,
         create_opts.default_retries,
+        create_opts.max_retries,
         create_opts.max_max_response_bytes,
         create_opts.max_request_bytes,
-        create_opts.retain_for_days
+        create_opts.retain_for_days,
+        create_opts.max_delay_days,
     )
     .fetch_one(&ctx.pool)
     .await?;
@@ -63,9 +67,11 @@ async fn create_tenant(
         tok_per_day: create_opts.tok_per_day,
         max_timeout: new_tenant.max_timeout,
         default_retries: new_tenant.default_retries,
+        max_retries: create_opts.max_retries,
         max_max_response_bytes: new_tenant.max_max_response_bytes,
         max_request_bytes: new_tenant.max_request_bytes,
         retain_for_days: new_tenant.retain_for_days,
+        max_delay_days: new_tenant.max_delay_days,
     };
 
     Ok(tenant)
@@ -110,9 +116,11 @@ async fn get_tenant(
         tok_per_day: tok_per_day as i32,
         max_timeout: tenant.max_timeout,
         default_retries: tenant.default_retries,
+        max_retries: tenant.max_retries,
         max_max_response_bytes: tenant.max_max_response_bytes,
         max_request_bytes: tenant.max_request_bytes,
         retain_for_days: tenant.retain_for_days,
+        max_delay_days: tenant.max_delay_days,
     };
 
     Ok(res)
@@ -125,9 +133,11 @@ struct UpdateTenant {
     tok_per_day: Option<i32>,
     max_timeout: Option<i32>,
     default_retries: Option<i32>,
+    max_retries: Option<i32>,
     max_max_response_bytes: Option<i32>,
     max_request_bytes: Option<i32>,
     retain_for_days: Option<i32>,
+    max_delay_days: Option<i32>,
 }
 
 #[utoipa::path(
@@ -168,10 +178,12 @@ async fn update_tenant(
         increment = COALESCE($4, increment),
         max_timeout = COALESCE($5, max_timeout),
         default_retries = COALESCE($6, default_retries),
-        max_max_response_bytes = COALESCE($7, max_max_response_bytes),
-        max_request_bytes = COALESCE($8, max_request_bytes),
-        retain_for_days = COALESCE($9, retain_for_days)
-      WHERE id = $10 RETURNING *
+        max_retries = COALESCE($7, max_retries),
+        max_max_response_bytes = COALESCE($8, max_max_response_bytes),
+        max_request_bytes = COALESCE($9, max_request_bytes),
+        retain_for_days = COALESCE($10, retain_for_days),
+        max_delay_days = COALESCE($11, max_delay_days)
+      WHERE id = $12 RETURNING *
       "#,
         update_opts.tokens,
         update_opts.max_tokens,
@@ -179,9 +191,11 @@ async fn update_tenant(
         increment,
         update_opts.max_timeout,
         update_opts.default_retries,
+        update_opts.max_retries,
         update_opts.max_max_response_bytes,
         update_opts.max_request_bytes,
         update_opts.retain_for_days,
+        update_opts.max_delay_days,
         tenant_id
     )
     .fetch_optional(&ctx.pool)
@@ -204,9 +218,11 @@ async fn update_tenant(
         tok_per_day: tok_per_day as i32,
         max_timeout: tenant.max_timeout,
         default_retries: tenant.default_retries,
+        max_retries: tenant.max_retries,
         max_max_response_bytes: tenant.max_max_response_bytes,
         max_request_bytes: tenant.max_request_bytes,
         retain_for_days: tenant.retain_for_days,
+        max_delay_days: tenant.max_delay_days,
     };
 
     Ok(res)

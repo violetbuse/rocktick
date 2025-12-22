@@ -8,9 +8,11 @@ CREATE TABLE tenants (
   next_increment TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   max_timeout INTEGER NOT NULL,
   default_retries INTEGER NOT NULL,
+  max_retries INTEGER NOT NULL,
   max_max_response_bytes INTEGER NOT NULL,
   max_request_bytes INTEGER NOT NULL,
-  retain_for_days INTEGER NOT NULL
+  retain_for_days INTEGER NOT NULL,
+  max_delay_days INTEGER NOT NULL
 );
 
 CREATE TABLE http_requests (

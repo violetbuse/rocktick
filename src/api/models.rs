@@ -124,9 +124,11 @@ pub struct Tenant {
     pub tok_per_day: i32,
     pub max_timeout: i32,
     pub default_retries: i32,
+    pub max_retries: i32,
     pub max_max_response_bytes: i32,
     pub max_request_bytes: i32,
     pub retain_for_days: i32,
+    pub max_delay_days: i32,
 }
 
 impl IntoResponse for Tenant {

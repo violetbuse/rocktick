@@ -141,6 +141,16 @@ async fn create_cron_job(
         ))));
     }
 
+    if let Some(input_max_retries) = create_opts.max_retries
+        && let Some(tenant) = &tenant
+        && input_max_retries > tenant.max_retries
+    {
+        return Err(ApiError::bad_request(Some(&format!(
+            "Your max retries of {input_max_retries} is higher than your limit of {}",
+            tenant.max_retries
+        ))));
+    }
+
     if let Some(input_max_response_bytes) = create_opts.max_response_bytes
         && let Some(tenant) = &tenant
         && input_max_response_bytes > tenant.max_max_response_bytes
@@ -369,6 +379,16 @@ async fn update_cron_job(
         return Err(ApiError::bad_request(Some(&format!(
             "Your timeout of {input_timeout}ms is higher than your limit of {}ms",
             tenant.max_timeout
+        ))));
+    }
+
+    if let Some(input_max_retries) = update_opts.max_retries
+        && let Some(tenant) = &tenant
+        && input_max_retries > tenant.max_retries
+    {
+        return Err(ApiError::bad_request(Some(&format!(
+            "Your max retries of {input_max_retries} is higher than your limit of {}",
+            tenant.max_retries
         ))));
     }
 
