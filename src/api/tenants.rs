@@ -1,10 +1,13 @@
 use axum::{
+    Json,
     extract::{Path, State},
+    response::IntoResponse,
     routing::{get, post},
 };
 use chrono::TimeDelta;
-use serde::Deserialize;
-use sqlx::postgres::types::PgInterval;
+use http::StatusCode;
+use serde::{Deserialize, Serialize};
+use sqlx::{postgres::types::PgInterval, types::BigDecimal};
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 
@@ -126,6 +129,61 @@ async fn get_tenant(
     Ok(res)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct UsageResult {
+    usage: i64,
+    new_cursor: i64,
+}
+
+impl IntoResponse for UsageResult {
+    fn into_response(self) -> axum::response::Response {
+        (StatusCode::OK, Json(self)).into_response()
+    }
+}
+
+async fn get_tenant_usage(
+    State(ctx): State<Context>,
+    TenantId(requesting_tenant_id): TenantId,
+    Path((tenant_id, start_time, end_time)): Path<(String, i64, i64)>,
+) -> Result<UsageResult, ApiError> {
+    if let Some(requesting_tenant_id) = requesting_tenant_id
+        && requesting_tenant_id != tenant_id
+    {
+        return Err(ApiError::tenant_not_allowed());
+    }
+
+    let result = sqlx::query!(
+        r#"
+      SELECT
+        COUNT(*) as usage_count
+      FROM job_executions as exec
+      JOIN scheduled_jobs as sched
+        ON exec.id = sched.execution_id
+      WHERE
+        sched.tenant_id = $1 AND
+        EXTRACT(EPOCH FROM exec.executed_at) >= $2 AND
+        EXTRACT(EPOCH FROM exec.executed_at) < $3
+      "#,
+        tenant_id,
+        BigDecimal::from(start_time),
+        BigDecimal::from(end_time)
+    )
+    .fetch_one(&ctx.pool)
+    .await?;
+
+    if let Some(count) = result.usage_count {
+        Ok(UsageResult {
+            usage: count,
+            new_cursor: end_time,
+        })
+    } else {
+        Ok(UsageResult {
+            usage: 0,
+            new_cursor: start_time,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 struct UpdateTenant {
     tokens: Option<i32>,
@@ -234,6 +292,10 @@ pub fn init_router() -> OpenApiRouter<Context> {
         .route(
             "/api/tenants/{tenant_id}",
             get(get_tenant).post(update_tenant),
+        )
+        .route(
+            "/api/tenants/{tenant_id}/usage/{start}/{end}",
+            get(get_tenant_usage),
         )
 }
 
