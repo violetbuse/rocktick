@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n    INSERT INTO tenants\n      (id, tokens, max_tokens, increment, period, max_timeout, default_retries, max_retries, max_max_response_bytes, max_request_bytes, retain_for_days, max_delay_days)\n    VALUES ($1, $2 ,$3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *;\n    ",
+  "query": "\n    INSERT INTO tenants\n      (id,\n      tokens,\n      max_tokens,\n      increment,\n      period,\n      max_timeout,\n      default_retries,\n      max_retries,\n      max_max_response_bytes,\n      max_request_bytes,\n      retain_for_days,\n      max_delay_days,\n      max_cron_jobs)\n    VALUES\n      ($1,\n      $2,\n      $3,\n      $4,\n      $5,\n      $6,\n      $7,\n      $8,\n      $9,\n      $10,\n      $11,\n      $12,\n      $13)\n    RETURNING *;\n    ",
   "describe": {
     "columns": [
       {
@@ -67,6 +67,11 @@
         "ordinal": 12,
         "name": "max_delay_days",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 13,
+        "name": "max_cron_jobs",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -76,6 +81,7 @@
         "Int4",
         "Int4",
         "Interval",
+        "Int4",
         "Int4",
         "Int4",
         "Int4",
@@ -98,8 +104,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "4a27d899e627577242faadfafa595e65435e7803fec29e8ff088f1a9271fb194"
+  "hash": "3833bd381de3a5c5241c54f42d0c6796077e79d682cfa462622aa8efe71890bd"
 }

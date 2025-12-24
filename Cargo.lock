@@ -2162,7 +2162,7 @@ dependencies = [
 
 [[package]]
 name = "rocktick"
-version = "0.1.35"
+version = "0.1.36"
 dependencies = [
  "anyhow",
  "async-trait",

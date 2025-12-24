@@ -129,6 +129,7 @@ pub struct Tenant {
     pub max_request_bytes: i32,
     pub retain_for_days: i32,
     pub max_delay_days: i32,
+    pub max_cron_jobs: i32,
 }
 
 impl IntoResponse for Tenant {

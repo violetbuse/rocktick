@@ -27,6 +27,7 @@ struct CreateTenant {
     max_request_bytes: i32,
     retain_for_days: i32,
     max_delay_days: i32,
+    max_cron_jobs: i32,
 }
 
 async fn create_tenant(
@@ -44,8 +45,34 @@ async fn create_tenant(
     let new_tenant = sqlx::query!(
         r#"
     INSERT INTO tenants
-      (id, tokens, max_tokens, increment, period, max_timeout, default_retries, max_retries, max_max_response_bytes, max_request_bytes, retain_for_days, max_delay_days)
-    VALUES ($1, $2 ,$3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *;
+      (id,
+      tokens,
+      max_tokens,
+      increment,
+      period,
+      max_timeout,
+      default_retries,
+      max_retries,
+      max_max_response_bytes,
+      max_request_bytes,
+      retain_for_days,
+      max_delay_days,
+      max_cron_jobs)
+    VALUES
+      ($1,
+      $2,
+      $3,
+      $4,
+      $5,
+      $6,
+      $7,
+      $8,
+      $9,
+      $10,
+      $11,
+      $12,
+      $13)
+    RETURNING *;
     "#,
         new_id,
         starting_tokens,
@@ -59,6 +86,7 @@ async fn create_tenant(
         create_opts.max_request_bytes,
         create_opts.retain_for_days,
         create_opts.max_delay_days,
+        create_opts.max_cron_jobs,
     )
     .fetch_one(&ctx.pool)
     .await?;
@@ -75,6 +103,7 @@ async fn create_tenant(
         max_request_bytes: new_tenant.max_request_bytes,
         retain_for_days: new_tenant.retain_for_days,
         max_delay_days: new_tenant.max_delay_days,
+        max_cron_jobs: new_tenant.max_cron_jobs,
     };
 
     Ok(tenant)
@@ -124,6 +153,7 @@ async fn get_tenant(
         max_request_bytes: tenant.max_request_bytes,
         retain_for_days: tenant.retain_for_days,
         max_delay_days: tenant.max_delay_days,
+        max_cron_jobs: tenant.max_cron_jobs,
     };
 
     Ok(res)
@@ -281,6 +311,7 @@ async fn update_tenant(
         max_request_bytes: tenant.max_request_bytes,
         retain_for_days: tenant.retain_for_days,
         max_delay_days: tenant.max_delay_days,
+        max_cron_jobs: tenant.max_cron_jobs,
     };
 
     Ok(res)

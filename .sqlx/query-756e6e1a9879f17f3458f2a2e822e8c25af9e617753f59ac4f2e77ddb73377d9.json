@@ -67,12 +67,18 @@
         "ordinal": 12,
         "name": "max_delay_days",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 13,
+        "name": "max_cron_jobs",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": []
     },
     "nullable": [
+      false,
       false,
       false,
       false,

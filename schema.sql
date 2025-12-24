@@ -12,7 +12,8 @@ CREATE TABLE tenants (
   max_max_response_bytes INTEGER NOT NULL,
   max_request_bytes INTEGER NOT NULL,
   retain_for_days INTEGER NOT NULL,
-  max_delay_days INTEGER NOT NULL
+  max_delay_days INTEGER NOT NULL,
+  max_cron_jobs INTEGER NOT NULL
 );
 
 CREATE TABLE http_requests (

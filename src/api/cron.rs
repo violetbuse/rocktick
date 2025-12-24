@@ -172,6 +172,35 @@ async fn create_cron_job(
         ))));
     }
 
+    if let Some(tenant) = &tenant {
+        let cron_count = sqlx::query!(
+            r#"
+        SELECT
+          COUNT(*) as tenant_cron_count
+        FROM cron_jobs
+        WHERE
+          tenant_id = $1 AND
+          deleted_at IS NULL;
+        "#,
+            tenant.id
+        )
+        .fetch_one(&mut *txn)
+        .await?;
+
+        if let Some(count) = cron_count.tenant_cron_count {
+            if count >= tenant.max_cron_jobs as i64 {
+                return Err(ApiError::bad_request(Some(&format!(
+                    "As part of your plan, you are limited to {} active cron jobs. You currently have {} cron jobs.",
+                    tenant.max_cron_jobs, count
+                ))));
+            }
+        } else {
+            return Err(ApiError::internal_server_error(Some(
+                "Failed to get cron count for tenant.",
+            )));
+        }
+    }
+
     let request_id = id::generate("request");
 
     let headers: Vec<String> = create_opts
