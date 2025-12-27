@@ -13,6 +13,7 @@ mod executor;
 mod id;
 mod pg;
 mod scheduler;
+mod secrets;
 
 #[derive(Debug, Clone)]
 pub struct GlobalConfig {

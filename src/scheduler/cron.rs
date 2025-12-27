@@ -1,10 +1,10 @@
-use std::{
-    hash::{DefaultHasher, Hash, Hasher},
-    str::FromStr,
-};
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 use chrono::{TimeDelta, Utc};
-use croner::Cron;
+use croner::{
+    CronIterator, Direction,
+    parser::{CronParser, Seconds},
+};
 use sqlx::{Pool, Postgres};
 
 use crate::{id, scheduler::Scheduler};
@@ -81,7 +81,9 @@ impl Scheduler for CronScheduler {
         .fetch_optional(&mut *tx)
         .await?;
 
-        let schedule = Cron::from_str(&cron_job.schedule);
+        let cron_parser = CronParser::builder().seconds(Seconds::Optional).build();
+
+        let schedule = cron_parser.parse(&cron_job.schedule);
 
         if let Err(err) = schedule {
             sqlx::query!(
@@ -113,10 +115,10 @@ impl Scheduler for CronScheduler {
         let mut times = Vec::new();
         let now = Utc::now();
 
-        for datetime in schedule
-            .iter_from(start_time, croner::Direction::Forward)
-            .take(70)
-        {
+        let cron_times =
+            CronIterator::new(schedule, start_time, false, Direction::Forward).take(70);
+
+        for datetime in cron_times {
             count += 1;
             times.push(datetime);
 

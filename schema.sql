@@ -1,4 +1,13 @@
 
+CREATE TABLE secrets (
+  id VARCHAR(255) NOT NULL PRIMARY KEY,
+  master_key_id INTEGER NOT NULL,
+  secret_version INTEGER NOT NULL,
+  encrypted_dek BYTEA NOT NULL,
+  encrypted_data BYTEA NOT NULL,
+  algorithm TEXT NOT NULL
+);
+
 CREATE TABLE tenants (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
   tokens INTEGER NOT NULL,
@@ -13,7 +22,9 @@ CREATE TABLE tenants (
   max_request_bytes INTEGER NOT NULL,
   retain_for_days INTEGER NOT NULL,
   max_delay_days INTEGER NOT NULL,
-  max_cron_jobs INTEGER NOT NULL
+  max_cron_jobs INTEGER NOT NULL,
+  current_signing_key VARCHAR(255) REFERENCES secrets(id),
+  next_signing_key VARCHAR(255) REFERENCES secrets(id)
 );
 
 CREATE TABLE http_requests (
