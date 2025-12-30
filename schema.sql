@@ -5,6 +5,8 @@ CREATE TABLE secrets (
   secret_version INTEGER NOT NULL,
   encrypted_dek BYTEA NOT NULL,
   encrypted_data BYTEA NOT NULL,
+  dek_nonce BYTEA NOT NULL,
+  data_nonce BYTEA NOT NULL,
   algorithm TEXT NOT NULL
 );
 
