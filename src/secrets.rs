@@ -1,28 +1,63 @@
+use std::str::FromStr;
+
 use aes_gcm::{
     Aes256Gcm, KeyInit,
     aead::{AeadMut, Payload},
 };
 use sqlx::{Executor, Postgres};
+use thiserror::Error;
+use zeroize::Zeroize;
 
 #[derive(Debug)]
 pub struct Secret {
-    id: String,
-    master_key_id: i32,
-    secret_version: i32,
-    encrypted_dek: Vec<u8>,
-    encrypted_data: Vec<u8>,
-    dek_nonce: Vec<u8>,
-    data_nonce: Vec<u8>,
-    algorithm: String,
+    pub id: String,
+    pub master_key_id: i32,
+    pub secret_version: i32,
+    pub encrypted_dek: Vec<u8>,
+    pub encrypted_data: Vec<u8>,
+    pub dek_nonce: Vec<u8>,
+    pub data_nonce: Vec<u8>,
+    pub algorithm: String,
 }
 
+impl Drop for Secret {
+    fn drop(&mut self) {
+        self.encrypted_dek.zeroize();
+        self.encrypted_data.zeroize();
+        self.dek_nonce.zeroize();
+        self.data_nonce.zeroize();
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Key {
     id: i32,
     key: [u8; 32],
 }
 
+impl Drop for Key {
+    fn drop(&mut self) {
+        self.key.zeroize();
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyRing {
     keys: Vec<Key>,
+}
+
+#[derive(Debug, Error)]
+pub enum KeyRingError {
+    #[error("Invalid entry: {0}")]
+    InvalidEntry(String),
+    #[error("Invalid ID: {0}")]
+    InvalidID(String),
+    #[error("Unexpected character: {0}")]
+    UnexpectedCharacter(char),
+    #[error("Invalid key length: {1} str: {0}")]
+    InvalidKeyLength(String, usize),
+    #[error("Zero Keys Specified")]
+    LessThanOneKey,
 }
 
 impl KeyRing {
@@ -32,6 +67,67 @@ impl KeyRing {
 
     fn max(&self) -> Option<&Key> {
         self.keys.iter().max_by_key(|k| k.id)
+    }
+
+    /// Parse a keyring from a comma and colon delimited list:
+    /// 1:HEXKEY,2:HEXKEY,...etc
+    pub fn parse_from_string(str: &str) -> Result<Self, KeyRingError> {
+        let mut keys = Vec::new();
+
+        for entry in str.split(',') {
+            let (id_str, key_hex) = entry
+                .split_once(':')
+                .ok_or(KeyRingError::InvalidEntry(entry.to_string()))?;
+
+            let id: i32 = id_str
+                .parse()
+                .map_err(|_| KeyRingError::InvalidID(id_str.to_string()))?;
+
+            let decoded = hex::decode(key_hex).map_err(|e| match e {
+                hex::FromHexError::InvalidHexCharacter { c, .. } => {
+                    KeyRingError::UnexpectedCharacter(c)
+                }
+                _ => KeyRingError::InvalidEntry(entry.to_string()),
+            })?;
+
+            if decoded.len() != 32 {
+                return Err(KeyRingError::InvalidKeyLength(
+                    entry.to_string(),
+                    decoded.len(),
+                ));
+            }
+
+            let key: [u8; 32] = decoded
+                .try_into()
+                .expect("Already checked that key length is 32.");
+
+            keys.push(Key { id, key });
+        }
+
+        if keys.is_empty() {
+            return Err(KeyRingError::LessThanOneKey);
+        }
+
+        Ok(KeyRing { keys })
+    }
+
+    pub fn dev() -> Self {
+        let dev_key = Key {
+            id: 1,
+            key: [0; 32],
+        };
+
+        Self {
+            keys: vec![dev_key],
+        }
+    }
+}
+
+impl FromStr for KeyRing {
+    type Err = KeyRingError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        KeyRing::parse_from_string(value)
     }
 }
 
@@ -43,6 +139,7 @@ pub enum SecretError {
     InvalidDekLength,
     InvalidUTF8,
     CryptoError(aes_gcm::Error),
+    InvalidSigningKeyLength(usize),
 }
 
 impl From<aes_gcm::Error> for SecretError {
@@ -150,14 +247,14 @@ impl Secret {
             Aes256Gcm::new(&master.key.into()).encrypt(&dek_nonce.into(), dek.as_slice())?;
 
         Ok(Secret {
-            id: self.id,
+            id: self.id.clone(),
             master_key_id: master.id,
             secret_version: self.secret_version + 1,
             encrypted_dek: re_encrypted_dek,
-            encrypted_data: self.encrypted_data,
-            dek_nonce: self.dek_nonce,
-            data_nonce: self.data_nonce,
-            algorithm: self.algorithm,
+            encrypted_data: self.encrypted_data.clone(),
+            dek_nonce: self.dek_nonce.clone(),
+            data_nonce: self.data_nonce.clone(),
+            algorithm: self.algorithm.clone(),
         })
     }
 }

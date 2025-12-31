@@ -10,6 +10,7 @@ use tonic::Status;
 use tonic::transport::Server;
 
 use crate::broker::broker_server::{Broker as BrokerTrait, BrokerServer};
+use crate::secrets::KeyRing;
 use crate::{BrokerOptions, id};
 
 tonic::include_proto!("broker");
@@ -18,6 +19,8 @@ pub struct Config {
     port: usize,
     hostname: String,
     pool: Pool<Postgres>,
+    key_ring: KeyRing,
+    fallback_signing_key: String,
 }
 
 impl Config {
@@ -26,6 +29,8 @@ impl Config {
             pool,
             hostname: options.hostname,
             port: options.port,
+            key_ring: options.key_ring,
+            fallback_signing_key: options.fallback_signing_key,
         }
     }
 }

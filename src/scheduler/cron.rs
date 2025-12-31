@@ -7,15 +7,18 @@ use croner::{
 };
 use sqlx::{Pool, Postgres};
 
-use crate::{id, scheduler::Scheduler};
+use crate::{
+    id,
+    scheduler::{Scheduler, SchedulerContext},
+};
 
 #[derive(Clone, Copy)]
 pub struct CronScheduler;
 
 #[async_trait::async_trait]
 impl Scheduler for CronScheduler {
-    async fn run_once(pool: &Pool<Postgres>, reached_end: &mut bool) -> anyhow::Result<()> {
-        let mut tx = pool.begin().await?;
+    async fn run_once(ctx: &SchedulerContext, reached_end: &mut bool) -> anyhow::Result<()> {
+        let mut tx = ctx.pool.begin().await?;
 
         let cron_job = sqlx::query!(
             r#"

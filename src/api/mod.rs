@@ -28,7 +28,7 @@ use utoipa::{
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};
 
-use crate::ApiOptions;
+use crate::{ApiOptions, secrets::KeyRing};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -37,6 +37,7 @@ pub struct Config {
     pool: Pool<Postgres>,
     valid_regions: Vec<String>,
     auth_keys: Option<Vec<String>>,
+    key_ring: KeyRing,
 }
 
 impl Config {
@@ -47,6 +48,7 @@ impl Config {
             pool,
             valid_regions: options.valid_regions,
             auth_keys: options.auth_keys,
+            key_ring: options.key_ring,
         }
     }
 }
@@ -81,6 +83,7 @@ pub struct Context {
     pub pool: Pool<Postgres>,
     pub valid_regions: Vec<String>,
     auth_keys: Option<Vec<String>>,
+    pub key_ring: KeyRing,
 }
 
 #[derive(FromRequest)]
@@ -225,6 +228,7 @@ pub async fn start(config: Config) -> anyhow::Result<()> {
         pool: config.pool,
         valid_regions: config.valid_regions,
         auth_keys: config.auth_keys,
+        key_ring: config.key_ring,
     };
 
     let router = create_router();

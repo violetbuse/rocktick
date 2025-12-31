@@ -3,9 +3,11 @@
 use std::sync::OnceLock;
 
 use anyhow::{Ok, anyhow};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, value_parser};
 use sqlx::postgres::PgPoolOptions;
 use tokio::select;
+
+use crate::secrets::KeyRing;
 
 mod api;
 mod broker;
@@ -14,6 +16,7 @@ mod id;
 mod pg;
 mod scheduler;
 mod secrets;
+mod signing;
 
 #[derive(Debug, Clone)]
 pub struct GlobalConfig {
@@ -78,6 +81,8 @@ pub struct DevOptions {
     postgres_temporary: bool,
     #[arg(long, env = "AUTH_KEY")]
     auth_key: Option<String>,
+    #[arg(long, env = "SIGNING_KEY")]
+    signing_key: String,
 }
 
 #[derive(Debug, Clone, Parser, PartialEq, Eq)]
@@ -107,6 +112,10 @@ pub struct BrokerOptions {
     hostname: String,
     #[arg(long, env = "DATABASE_URL")]
     postgres_url: String,
+    #[arg(long, value_parser, env = "KEY_RING")]
+    key_ring: KeyRing,
+    #[arg(long, env = "FALLBACK_SIGNING_KEY")]
+    fallback_signing_key: String,
 }
 
 impl TryFrom<DevOptions> for BrokerOptions {
@@ -119,6 +128,8 @@ impl TryFrom<DevOptions> for BrokerOptions {
             postgres_url: value
                 .postgres_url
                 .ok_or(anyhow!("No postgres url provided!"))?,
+            key_ring: KeyRing::dev(),
+            fallback_signing_key: value.signing_key,
         })
     }
 }
@@ -137,6 +148,10 @@ pub struct SchedulerOptions {
     retry_schedulers: usize,
     #[arg(long, default_value_t = 1, env = "PAST_RETENTION_SCHEDULER_COUNT")]
     past_retention_schedulers: usize,
+    #[arg(long, default_value_t = 1, env = "KEY_ROTATION_SCHEDULER_COUNT")]
+    key_rotation_schedulers: usize,
+    #[arg(long, value_parser, env = "KEY_RING")]
+    key_ring: KeyRing,
 }
 
 impl TryFrom<DevOptions> for SchedulerOptions {
@@ -152,6 +167,8 @@ impl TryFrom<DevOptions> for SchedulerOptions {
             one_off_schedulers: 1,
             retry_schedulers: 1,
             past_retention_schedulers: 1,
+            key_rotation_schedulers: 1,
+            key_ring: KeyRing::dev(),
         })
     }
 }
@@ -169,6 +186,8 @@ pub struct ApiOptions {
     #[arg(long, env = "AUTH_KEYS", num_args = 1, value_delimiter = ',')]
     /// A comma separated string of auth keys
     auth_keys: Option<Vec<String>>,
+    #[arg(long, value_parser, env = "KEY_RING")]
+    key_ring: KeyRing,
 }
 
 impl TryFrom<DevOptions> for ApiOptions {
@@ -183,6 +202,7 @@ impl TryFrom<DevOptions> for ApiOptions {
                 .ok_or(anyhow!("No postgres url provided!"))?,
             valid_regions: value.valid_regions,
             auth_keys: value.auth_key.map(|s| vec![s]),
+            key_ring: KeyRing::dev(),
         })
     }
 }

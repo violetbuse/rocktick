@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use sqlx::{Pool, Postgres};
 
-use crate::scheduler::Scheduler;
+use crate::scheduler::{Scheduler, SchedulerContext};
 
 #[derive(Clone, Copy)]
 pub struct ScheduledPastRetention;
@@ -11,8 +11,8 @@ pub struct ScheduledPastRetention;
 impl Scheduler for ScheduledPastRetention {
     const WAIT: Duration = Duration::from_mins(5);
 
-    async fn run_once(pool: &Pool<Postgres>, reached_end: &mut bool) -> anyhow::Result<()> {
-        let mut tx = pool.begin().await?;
+    async fn run_once(ctx: &SchedulerContext, reached_end: &mut bool) -> anyhow::Result<()> {
+        let mut tx = ctx.pool.begin().await?;
 
         let scheduled_job = sqlx::query!(
             r#"
