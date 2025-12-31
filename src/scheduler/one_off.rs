@@ -1,7 +1,6 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use chrono::DateTime;
-use sqlx::{Pool, Postgres};
 
 use crate::{
     id,

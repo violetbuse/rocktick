@@ -1,12 +1,8 @@
 use std::cmp::max;
 
 use chrono::{TimeDelta, Utc};
-use sqlx::{Pool, Postgres};
 
-use crate::{
-    id,
-    scheduler::{Scheduler, SchedulerContext},
-};
+use crate::scheduler::{Scheduler, SchedulerContext};
 
 #[derive(Clone, Copy)]
 pub struct TenantScheduler;

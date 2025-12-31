@@ -3,7 +3,6 @@ use std::{
     time::Duration,
 };
 
-use sqlx::{Pool, Postgres};
 
 use crate::{
     id,

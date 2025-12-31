@@ -5,7 +5,6 @@ use croner::{
     CronIterator, Direction,
     parser::{CronParser, Seconds},
 };
-use sqlx::{Pool, Postgres};
 
 use crate::{
     id,

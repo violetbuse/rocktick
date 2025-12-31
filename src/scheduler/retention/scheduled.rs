@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use sqlx::{Pool, Postgres};
 
 use crate::scheduler::{Scheduler, SchedulerContext};
 

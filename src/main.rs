@@ -3,7 +3,7 @@
 use std::sync::OnceLock;
 
 use anyhow::{Ok, anyhow};
-use clap::{Parser, Subcommand, value_parser};
+use clap::{Parser, Subcommand};
 use sqlx::postgres::PgPoolOptions;
 use tokio::select;
 
