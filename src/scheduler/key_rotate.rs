@@ -43,6 +43,8 @@ impl Scheduler for KeyRotationScheduler {
 
         rotated.put(&mut *tx).await?;
 
+        tx.commit().await?;
+
         Ok(())
     }
 }

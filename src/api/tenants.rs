@@ -427,6 +427,8 @@ async fn rotate_secrets(
         .await?;
     }
 
+    tx.commit().await?;
+
     Ok(SigningSecretData::Pair {
         current_signing_key: new_current_signing_key,
         next_signing_key: new_next_signing_key,
