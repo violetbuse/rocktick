@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n      SELECT id, current_signing_key, next_signing_key FROM tenants\n      WHERE id = $1\n      ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "current_signing_key",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "next_signing_key",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "d3b7f8bebc35a786cdab581f24c33ae112aff5668fd445f76da372d8a7c94763"
+}

@@ -172,7 +172,7 @@ impl Secret {
         .await
     }
 
-    pub async fn put<'a, E>(self, executor: E) -> Result<(), sqlx::Error>
+    pub async fn put<'a, E>(&self, executor: E) -> Result<(), sqlx::Error>
     where
         E: Executor<'a, Database = Postgres>,
     {

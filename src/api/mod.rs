@@ -27,7 +27,10 @@ use utoipa::{
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_scalar::{Scalar, Servable};
 
-use crate::{ApiOptions, secrets::KeyRing};
+use crate::{
+    ApiOptions,
+    secrets::{self, KeyRing},
+};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -130,6 +133,15 @@ impl From<sqlx::Error> for ApiError {
         }
 
         ApiError::internal_server_error(Some(&value.to_string()))
+    }
+}
+
+impl From<secrets::SecretError> for ApiError {
+    fn from(_value: secrets::SecretError) -> Self {
+        ApiError {
+            code: StatusCode::INTERNAL_SERVER_ERROR,
+            message: "InternalServerCryptoError".to_string(),
+        }
     }
 }
 

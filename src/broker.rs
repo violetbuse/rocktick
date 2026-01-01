@@ -265,7 +265,15 @@ impl BrokerTrait for Broker {
                             let req_headers: Vec<String> = execution
                                 .req_headers
                                 .iter()
-                                .map(|(k, v)| format!("{k}: {v}"))
+                                .filter_map(|(k, v)| {
+                                  if k.starts_with("Rocktick-") {
+                                    None
+                                  } else {
+                                    Some(
+                                      format!("{k}: {v}")
+                                    )
+                                  }
+                                })
                                 .collect();
 
                             sqlx::query!(

@@ -10,10 +10,12 @@ use serde::{Deserialize, Serialize};
 use sqlx::{postgres::types::PgInterval, types::BigDecimal};
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
+use zeroize::Zeroize;
 
 use crate::{
     api::{ApiError, Context, JsonBody, TenantId, models::Tenant},
     id,
+    secrets::Secret,
 };
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -228,17 +230,6 @@ struct UpdateTenant {
     max_delay_days: Option<i32>,
 }
 
-#[utoipa::path(
-  post,
-  path = "/api/tenants/{tenant_id}",
-  params(("tenant_id", description = "Id of the tenant")),
-  request_body = UpdateTenant,
-  responses(
-    (status = 200, body =  Tenant),
-    (status = "4XX", body = ApiError),
-    (status = "5XX", body = ApiError)),
-  tag = "tenants"
-)]
 async fn update_tenant(
     State(ctx): State<Context>,
     Path(tenant_id): Path<String>,
@@ -317,6 +308,109 @@ async fn update_tenant(
     Ok(res)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SigningSecretPair {
+    current_signing_key: String,
+    next_signing_key: String,
+}
+
+impl IntoResponse for SigningSecretPair {
+    fn into_response(self) -> axum::response::Response {
+        (StatusCode::OK, Json(self)).into_response()
+    }
+}
+
+impl Drop for SigningSecretPair {
+    fn drop(&mut self) {
+        self.current_signing_key.zeroize();
+        self.next_signing_key.zeroize();
+    }
+}
+
+async fn rotate_secrets(
+    State(ctx): State<Context>,
+    TenantId(requesting_tenant_id): TenantId,
+    Path(tenant_id): Path<String>,
+) -> Result<SigningSecretPair, ApiError> {
+    if let Some(requesting_tenant_id) = requesting_tenant_id
+        && requesting_tenant_id != tenant_id
+    {
+        return Err(ApiError::tenant_not_allowed());
+    }
+
+    let mut tx = ctx.pool.begin().await?;
+
+    let current = sqlx::query!(
+        r#"
+      SELECT id, current_signing_key, next_signing_key FROM tenants
+      WHERE id = $1
+      "#,
+        tenant_id
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let (new_current_signing_key, new_current_secret) =
+        if let Some(secret_id) = current.next_signing_key {
+            let secret = Secret::get(&secret_id, &mut *tx).await?;
+            let decrypted = secret.decrypt(&ctx.key_ring)?;
+
+            (decrypted, secret)
+        } else {
+            let secret_id = id::generate("secret");
+            let signing_secret = id::generate("signature");
+
+            let secret = Secret::new(secret_id, signing_secret.clone(), &ctx.key_ring)?;
+
+            secret.put(&mut *tx).await?;
+
+            (signing_secret, secret)
+        };
+
+    let (new_next_signing_key, new_next_secret) = {
+        let secret_id = id::generate("secret");
+        let signing_secret = id::generate("signature");
+
+        let secret = Secret::new(secret_id, signing_secret.clone(), &ctx.key_ring)?;
+
+        secret.put(&mut *tx).await?;
+
+        (signing_secret, secret)
+    };
+
+    sqlx::query!(
+        r#"
+      UPDATE tenants
+      SET
+        current_signing_key = $2,
+        next_signing_key = $3
+      WHERE id = $1
+      "#,
+        tenant_id,
+        new_current_secret.id,
+        new_next_secret.id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    if let Some(old_current_signing_key) = current.current_signing_key {
+        sqlx::query!(
+            r#"
+        DELETE FROM secrets
+        WHERE id = $1
+        "#,
+            old_current_signing_key
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    Ok(SigningSecretPair {
+        current_signing_key: new_current_signing_key,
+        next_signing_key: new_next_signing_key,
+    })
+}
+
 pub fn init_router() -> OpenApiRouter<Context> {
     OpenApiRouter::new()
         .route("/api/tenants", post(create_tenant))
@@ -327,6 +421,10 @@ pub fn init_router() -> OpenApiRouter<Context> {
         .route(
             "/api/tenants/{tenant_id}/usage/{start}/{end}",
             get(get_tenant_usage),
+        )
+        .route(
+            "/api/tenants/{tenant_id}/signing_secrets/rotate",
+            post(rotate_secrets),
         )
 }
 
