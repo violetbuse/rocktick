@@ -11,13 +11,7 @@ impl Scheduler for KeyRotationScheduler {
     async fn run_once(ctx: &SchedulerContext, reached_end: &mut bool) -> anyhow::Result<()> {
         let latest_key = ctx.key_ring.max();
 
-        if latest_key.is_none() {
-            eprintln!("No Keys found!");
-            *reached_end = true;
-            return Ok(());
-        }
-
-        let master_key_id = latest_key.unwrap().id;
+        let master_key_id = latest_key.id;
 
         let mut tx = ctx.pool.begin().await?;
 

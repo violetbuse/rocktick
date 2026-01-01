@@ -81,8 +81,10 @@ pub struct DevOptions {
     postgres_temporary: bool,
     #[arg(long, env = "AUTH_KEY")]
     auth_key: Option<String>,
-    #[arg(long, env = "SIGNING_KEY", default_value = "00000000")]
+    #[arg(long, env = "ROCKTICK_SIGNING_KEY", default_value = "00000000")]
     signing_key: String,
+    #[arg(long, value_parser, env = "ROCKTICK_KEY_RING")]
+    key_ring: Option<KeyRing>,
 }
 
 #[derive(Debug, Clone, Parser, PartialEq, Eq)]
@@ -128,7 +130,7 @@ impl TryFrom<DevOptions> for BrokerOptions {
             postgres_url: value
                 .postgres_url
                 .ok_or(anyhow!("No postgres url provided!"))?,
-            key_ring: KeyRing::dev(),
+            key_ring: value.key_ring.unwrap_or(KeyRing::dev()),
             fallback_signing_key: value.signing_key,
         })
     }
@@ -168,7 +170,7 @@ impl TryFrom<DevOptions> for SchedulerOptions {
             retry_schedulers: 1,
             past_retention_schedulers: 1,
             key_rotation_schedulers: 1,
-            key_ring: KeyRing::dev(),
+            key_ring: value.key_ring.unwrap_or(KeyRing::dev()),
         })
     }
 }
@@ -202,7 +204,7 @@ impl TryFrom<DevOptions> for ApiOptions {
                 .ok_or(anyhow!("No postgres url provided!"))?,
             valid_regions: value.valid_regions,
             auth_keys: value.auth_key.map(|s| vec![s]),
-            key_ring: KeyRing::dev(),
+            key_ring: value.key_ring.unwrap_or(KeyRing::dev()),
         })
     }
 }

@@ -65,8 +65,12 @@ impl KeyRing {
         self.keys.iter().find(|k| k.id == id)
     }
 
-    pub fn max(&self) -> Option<&Key> {
-        self.keys.iter().max_by_key(|k| k.id)
+    pub fn max(&self) -> Key {
+        self.keys
+            .iter()
+            .max_by_key(|k| k.id)
+            .expect("KeyRing should have at least one key.")
+            .clone()
     }
 
     /// Parse a keyring from a comma and colon delimited list:
@@ -133,8 +137,8 @@ impl FromStr for KeyRing {
 
 #[derive(Debug, Error)]
 pub enum SecretError {
-    #[error("Key not found")]
-    KeyNotFound(Option<i32>),
+    #[error("Key not found {0}")]
+    KeyNotFound(i32),
     #[error("Algorithm mismatch")]
     AlgorithmMismatch,
     #[error("Invalid nonce length")]
@@ -205,7 +209,7 @@ impl Secret {
     pub fn decrypt(&self, keys: &KeyRing) -> Result<String, SecretError> {
         let master = keys
             .get(self.master_key_id)
-            .ok_or(SecretError::KeyNotFound(Some(self.master_key_id)))?;
+            .ok_or(SecretError::KeyNotFound(self.master_key_id))?;
 
         if self.algorithm != "AES-256-GCM" {
             return Err(SecretError::AlgorithmMismatch);
@@ -239,7 +243,7 @@ impl Secret {
     }
 
     pub fn new(id: String, secret: String, keys: &KeyRing) -> Result<Self, SecretError> {
-        let master = keys.max().ok_or(SecretError::KeyNotFound(None))?;
+        let master = keys.max();
 
         let dek = rand::random::<[u8; 32]>();
         let dek_nonce = rand::random::<[u8; 12]>();
@@ -265,8 +269,8 @@ impl Secret {
     pub fn rotate(self, keys: &KeyRing) -> Result<Self, SecretError> {
         let existing_master = keys
             .get(self.master_key_id)
-            .ok_or(SecretError::KeyNotFound(Some(self.master_key_id)))?;
-        let master = keys.max().ok_or(SecretError::KeyNotFound(None))?;
+            .ok_or(SecretError::KeyNotFound(self.master_key_id))?;
+        let master = keys.max();
 
         let dek_nonce: [u8; 12] = self
             .dek_nonce
@@ -366,18 +370,16 @@ mod tests {
 
         let empty_keyring = create_key_ring(vec![]);
         match secret.decrypt(&empty_keyring) {
-            Err(SecretError::KeyNotFound(Some(id))) => assert_eq!(id, 1),
+            Err(SecretError::KeyNotFound(id)) => assert_eq!(id, 1),
             _ => panic!("Expected KeyNotFound(Some(1))"),
         }
     }
 
     #[test]
+    #[should_panic]
     fn test_create_no_keys() {
         let empty_keyring = create_key_ring(vec![]);
-        match Secret::new("id".to_string(), "val".to_string(), &empty_keyring) {
-            Err(SecretError::KeyNotFound(None)) => {}
-            _ => panic!("Expected KeyNotFound(None)"),
-        }
+        let _ = Secret::new("id".to_string(), "val".to_string(), &empty_keyring);
     }
 
     #[test]
@@ -451,7 +453,7 @@ mod tests {
         let secret = Secret::new("id".into(), "val".into(), &keyring1).unwrap();
 
         match secret.rotate(&keyring2_only) {
-            Err(SecretError::KeyNotFound(Some(1))) => {}
+            Err(SecretError::KeyNotFound(1)) => {}
             res => panic!("Expected KeyNotFound(Some(1)), got {:?}", res),
         }
     }
