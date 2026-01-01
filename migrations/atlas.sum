@@ -1,4 +1,4 @@
-h1:8+jnUuGYbxQoCgu/ZxiN/GpkefS14PQBMR+phfLB1G4=
+h1:w4p0lTM7Eiyc5WWt9VLQppF9ouvBoa2uagRzXgJtzeI=
 20251203210042_initialized_project.sql h1:JphUmqibBPSs2wG6eWQFyijH8UzApjfiUnyUxAq1WuM=
 20251204091639_add_url_to_request.sql h1:wDFdyCr7r9hqY5BlH+yu07/iFFVKpmueT1gybTzSnSI=
 20251204091857_add_scheduled_stuff.sql h1:Ykvy8wTbx7hQmdn00SC/XiAllJfsTxEX1XceqrOMKLc=
@@ -36,3 +36,4 @@ h1:8+jnUuGYbxQoCgu/ZxiN/GpkefS14PQBMR+phfLB1G4=
 20251222105155_remove_max_delay_days_default.sql h1:5tgv1jPLahJScg/w4LWWZqMPyFWypjwOSDms/k0mjSo=
 20251224165906_create_tenant_max_cron_jobs.sql h1:9o2Qnxm42FTVvKxhvG+75QSiesKHno427+PAZkN5Tbo=
 20251224165921_remove_max_cron_jobs_default.sql h1:WeNcoQKx2Q7FLWjaorLfhxqE1W2Lk+lGcMUerkD3QQo=
+20260101144149_add_secrets.sql h1:J5/T/3Ra6ZziJVEVGkZ+ex25OMSVBjoT1E8zzwVSEYc=

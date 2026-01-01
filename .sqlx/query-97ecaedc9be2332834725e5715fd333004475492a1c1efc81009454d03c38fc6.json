@@ -72,6 +72,16 @@
         "ordinal": 13,
         "name": "max_cron_jobs",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "current_signing_key",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 15,
+        "name": "next_signing_key",
+        "type_info": "Varchar"
       }
     ],
     "parameters": {
@@ -93,7 +103,9 @@
       false,
       false,
       false,
-      false
+      false,
+      true,
+      true
     ]
   },
   "hash": "97ecaedc9be2332834725e5715fd333004475492a1c1efc81009454d03c38fc6"

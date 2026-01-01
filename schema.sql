@@ -26,7 +26,11 @@ CREATE TABLE tenants (
   max_delay_days INTEGER NOT NULL,
   max_cron_jobs INTEGER NOT NULL,
   current_signing_key VARCHAR(255) REFERENCES secrets(id),
-  next_signing_key VARCHAR(255) REFERENCES secrets(id)
+  next_signing_key VARCHAR(255) REFERENCES secrets(id),
+  CONSTRAINT both_signing_keys_or_just_one CHECK (
+    (current_signing_key IS NULL AND next_signing_key IS NULL) OR
+    (current_signing_key IS NOT NULL AND next_signing_key IS NOT NULL)
+  )
 );
 
 CREATE TABLE http_requests (

@@ -1,0 +1,136 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n              WITH jobs_to_lock AS (\n                SELECT job.id as id, tenants.id as tenant_id, job.request_id\n                FROM scheduled_jobs as job\n                LEFT JOIN tenants ON\n                  job.tenant_id = tenants.id\n                WHERE lock_nonce IS NULL\n                  AND execution_id IS NULL\n                  AND (tenants.tokens > 0 OR tenants.tokens IS NULL)\n                  AND (\n                    (region = $1 AND scheduled_at <= now() + interval '3 seconds')\n                    OR (scheduled_at <= now() - interval '5 seconds')\n                  )\n                ORDER BY scheduled_at ASC\n                FOR UPDATE OF job SKIP LOCKED\n              )\n              UPDATE scheduled_jobs AS job\n              SET lock_nonce = extract(epoch from now())\n              FROM\n                jobs_to_lock AS to_lock\n              JOIN http_requests AS req\n                ON req.id = to_lock.request_id\n              LEFT JOIN tenants AS tenant\n                ON tenant.id = to_lock.tenant_id\n              LEFT JOIN secrets as secret\n                ON secret.id = tenant.current_signing_key\n              WHERE job.id = to_lock.id\n                AND (to_lock.tenant_id IS NULL OR job.tenant_id = to_lock.tenant_id)\n              RETURNING\n                job.id as job_id,\n                job.lock_nonce,\n                job.scheduled_at,\n                job.timeout_ms,\n                job.max_response_bytes,\n                tenant.id as \"tenant_id?\",\n                tenant.max_timeout as \"max_timeout?\",\n                tenant.max_max_response_bytes as \"max_max_response_bytes?\",\n                secret.id as \"secret_id?\",\n                secret.master_key_id as \"master_key_id?\",\n                secret.secret_version as \"secret_version?\",\n                secret.encrypted_dek as \"encrypted_dek?\",\n                secret.encrypted_data as \"encrypted_data?\",\n                secret.dek_nonce as \"dek_nonce?\",\n                secret.data_nonce as \"data_nonce?\",\n                secret.algorithm as \"algorithm?\",\n                req.method,\n                req.url,\n                req.headers,\n                req.body;\n              ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "lock_nonce",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "scheduled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "timeout_ms",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "max_response_bytes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "tenant_id?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "max_timeout?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "max_max_response_bytes?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "secret_id?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "master_key_id?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "secret_version?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "encrypted_dek?",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 12,
+        "name": "encrypted_data?",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 13,
+        "name": "dek_nonce?",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 14,
+        "name": "data_nonce?",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 15,
+        "name": "algorithm?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "method",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 17,
+        "name": "url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "headers",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 19,
+        "name": "body",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "95ae77b7cf307c3e19bd653aae1f7bc1a297fb273e67bd04f949aa72f62f4627"
+}

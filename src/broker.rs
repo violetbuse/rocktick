@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use sqlx::{Pool, Postgres};
 use tokio::select;
 use tokio::sync::mpsc;
@@ -10,7 +11,8 @@ use tonic::Status;
 use tonic::transport::Server;
 
 use crate::broker::broker_server::{Broker as BrokerTrait, BrokerServer};
-use crate::secrets::KeyRing;
+use crate::secrets::{KeyRing, Secret};
+use crate::signing::SignatureBuilder;
 use crate::{BrokerOptions, id};
 
 tonic::include_proto!("broker");
@@ -38,6 +40,8 @@ impl Config {
 #[derive(Debug)]
 struct Broker {
     pool: Pool<Postgres>,
+    key_ring: KeyRing,
+    fallback_signing_secret: String,
 }
 
 #[tonic::async_trait]
@@ -53,6 +57,8 @@ impl BrokerTrait for Broker {
         let region = req.into_inner().region;
         let pool = self.pool.clone();
 
+        let key_ring = self.key_ring.clone();
+        let fallback_signing_secret = self.fallback_signing_secret.clone();
         tokio::spawn(async move {
             let mut stream = sqlx::query!(
                 r#"
@@ -79,6 +85,8 @@ impl BrokerTrait for Broker {
                 ON req.id = to_lock.request_id
               LEFT JOIN tenants AS tenant
                 ON tenant.id = to_lock.tenant_id
+              LEFT JOIN secrets as secret
+                ON secret.id = tenant.current_signing_key
               WHERE job.id = to_lock.id
                 AND (to_lock.tenant_id IS NULL OR job.tenant_id = to_lock.tenant_id)
               RETURNING
@@ -87,8 +95,17 @@ impl BrokerTrait for Broker {
                 job.scheduled_at,
                 job.timeout_ms,
                 job.max_response_bytes,
+                tenant.id as "tenant_id?",
                 tenant.max_timeout as "max_timeout?",
                 tenant.max_max_response_bytes as "max_max_response_bytes?",
+                secret.id as "secret_id?",
+                secret.master_key_id as "master_key_id?",
+                secret.secret_version as "secret_version?",
+                secret.encrypted_dek as "encrypted_dek?",
+                secret.encrypted_data as "encrypted_data?",
+                secret.dek_nonce as "dek_nonce?",
+                secret.data_nonce as "data_nonce?",
+                secret.algorithm as "algorithm?",
                 req.method,
                 req.url,
                 req.headers,
@@ -107,22 +124,96 @@ impl BrokerTrait for Broker {
                         .or(job.max_max_response_bytes)
                         .unwrap_or(33554432);
 
+                    let tenant_signing_secret: Option<Secret> = if let Some(id) = job.secret_id
+                        && let Some(master_key_id) = job.master_key_id
+                        && let Some(secret_version) = job.secret_version
+                        && let Some(encrypted_dek) = job.encrypted_dek
+                        && let Some(encrypted_data) = job.encrypted_data
+                        && let Some(dek_nonce) = job.dek_nonce
+                        && let Some(data_nonce) = job.data_nonce
+                        && let Some(algorithm) = job.algorithm
+                    {
+                        Some(Secret {
+                            id,
+                            master_key_id,
+                            secret_version,
+                            encrypted_dek,
+                            encrypted_data,
+                            dek_nonce,
+                            data_nonce,
+                            algorithm,
+                        })
+                    } else {
+                        None
+                    };
+
+                    let signing_secret: Option<String> = if let Some(tenant_id) = job.tenant_id {
+                        if let Some(signing_secret) = tenant_signing_secret {
+                            match signing_secret.decrypt(&key_ring) {
+                                Ok(decrypted) => Some(decrypted),
+                                Err(err) => {
+                                    eprintln!(
+                                        "Error decrypting signing secret {} for tenant {}: {:?}",
+                                        signing_secret.id, tenant_id, err
+                                    );
+                                    None
+                                }
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        Some(fallback_signing_secret.clone())
+                    };
+
+                    let signature: Option<String> = if let Some(signing_key) = signing_secret {
+                        let signature_result = SignatureBuilder {
+                            signing_key,
+                            time: Utc::now(),
+                            url: job.url.clone(),
+                            body: job.body.clone(),
+                        }
+                        .signature_header();
+
+                        match signature_result {
+                            Ok(signature) => Some(signature),
+                            Err(signing_error) => {
+                                eprintln!(
+                                    "Error signing request {}: {:?}",
+                                    job.job_id.clone(),
+                                    signing_error
+                                );
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    };
+
+                    let mut req_headers = job
+                        .headers
+                        .iter()
+                        .filter_map(|s| {
+                            let mut parts = s.splitn(2, ":");
+                            let key = parts.next()?.trim().to_string();
+                            let value = parts.next()?.trim().to_string();
+                            Some((key, value))
+                        })
+                        .collect::<HashMap<String, String>>();
+
+                    req_headers.insert("Rocktick-Job-Id".to_string(), job.job_id.clone());
+
+                    if let Some(signature_header) = signature {
+                        req_headers.insert("Rocktick-Signature".to_string(), signature_header);
+                    }
+
                     let job_spec = JobSpec {
                         job_id: job.job_id,
                         lock_nonce: job.lock_nonce.unwrap() as i64,
                         scheduled_at: job.scheduled_at.timestamp(),
                         method: job.method,
                         url: job.url,
-                        headers: job
-                            .headers
-                            .iter()
-                            .filter_map(|s| {
-                                let mut parts = s.splitn(2, ":");
-                                let key = parts.next()?.trim().to_string();
-                                let value = parts.next()?.trim().to_string();
-                                Some((key, value))
-                            })
-                            .collect(),
+                        headers: req_headers,
                         body: job.body,
                         timeout_ms: timeout,
                         max_response_bytes: max_response_bytes as i64,
@@ -319,7 +410,11 @@ pub async fn start(config: Config) -> anyhow::Result<()> {
 
     let cleanup_fut = run_cleanup(config.pool.clone());
 
-    let broker = Broker { pool: config.pool };
+    let broker = Broker {
+        pool: config.pool,
+        key_ring: config.key_ring,
+        fallback_signing_secret: config.fallback_signing_key,
+    };
 
     let svc = BrokerServer::new(broker);
 
