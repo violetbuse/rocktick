@@ -41,6 +41,7 @@ jobs:
     steps:
       - name: Set Version
         id: version
+        shell: bash
         run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
 
       - name: Checkout
