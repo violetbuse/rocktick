@@ -81,7 +81,7 @@ pub struct DevOptions {
     postgres_temporary: bool,
     #[arg(long, env = "AUTH_KEY")]
     auth_key: Option<String>,
-    #[arg(long, env = "SIGNING_KEY")]
+    #[arg(long, env = "SIGNING_KEY", default_value = "00000000")]
     signing_key: String,
 }
 

@@ -13,7 +13,7 @@ use tonic::transport::Server;
 use crate::broker::broker_server::{Broker as BrokerTrait, BrokerServer};
 use crate::secrets::{KeyRing, Secret};
 use crate::signing::SignatureBuilder;
-use crate::{BrokerOptions, id};
+use crate::{BrokerOptions, GLOBAL_CONFIG, id};
 
 tonic::include_proto!("broker");
 
@@ -415,6 +415,10 @@ async fn run_cleanup(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
 pub async fn start(config: Config) -> anyhow::Result<()> {
     let addr = format!("{}:{}", config.hostname, config.port).parse()?;
+
+    if GLOBAL_CONFIG.get().unwrap().is_dev {
+        println!("Signing Key: {}", &config.fallback_signing_key)
+    }
 
     let cleanup_fut = run_cleanup(config.pool.clone());
 
