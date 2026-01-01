@@ -31,7 +31,7 @@ impl Drop for Secret {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Key {
-    id: i32,
+    pub id: i32,
     key: [u8; 32],
 }
 
@@ -61,11 +61,11 @@ pub enum KeyRingError {
 }
 
 impl KeyRing {
-    fn get(&self, id: i32) -> Option<&Key> {
+    pub fn get(&self, id: i32) -> Option<&Key> {
         self.keys.iter().find(|k| k.id == id)
     }
 
-    fn max(&self) -> Option<&Key> {
+    pub fn max(&self) -> Option<&Key> {
         self.keys.iter().max_by_key(|k| k.id)
     }
 
@@ -131,14 +131,21 @@ impl FromStr for KeyRing {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum SecretError {
+    #[error("Key not found")]
     KeyNotFound(Option<i32>),
+    #[error("Algorithm mismatch")]
     AlgorithmMismatch,
+    #[error("Invalid nonce length")]
     InvalidNonceLength,
+    #[error("Invalid DEK length")]
     InvalidDekLength,
+    #[error("Invalid UTF-8")]
     InvalidUTF8,
+    #[error("Crypto error {0}")]
     CryptoError(aes_gcm::Error),
+    #[error("Invalid signing key length {0}")]
     InvalidSigningKeyLength(usize),
 }
 
@@ -149,18 +156,50 @@ impl From<aes_gcm::Error> for SecretError {
 }
 
 impl Secret {
-    pub async fn get<'a, E>(_id: &str, _executor: E) -> Result<Self, sqlx::Error>
+    pub async fn get<'a, E>(id: &str, executor: E) -> Result<Self, sqlx::Error>
     where
         E: Executor<'a, Database = Postgres>,
     {
-        todo!()
+        sqlx::query_as!(
+            Secret,
+            r#"
+        SELECT * FROM secrets
+        WHERE id = $1
+        "#,
+            id
+        )
+        .fetch_one(executor)
+        .await
     }
 
-    pub async fn put<'a, E>(self, _executor: E) -> Result<(), sqlx::Error>
+    pub async fn put<'a, E>(self, executor: E) -> Result<(), sqlx::Error>
     where
         E: Executor<'a, Database = Postgres>,
     {
-        todo!()
+        sqlx::query!(r#"
+        INSERT INTO secrets (id, master_key_id, secret_version, encrypted_dek, encrypted_data, dek_nonce, data_nonce, algorithm)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (id) DO UPDATE SET
+            master_key_id = EXCLUDED.master_key_id,
+            secret_version = EXCLUDED.secret_version,
+            encrypted_dek = EXCLUDED.encrypted_dek,
+            encrypted_data = EXCLUDED.encrypted_data,
+            dek_nonce = EXCLUDED.dek_nonce,
+            data_nonce = EXCLUDED.data_nonce,
+            algorithm = EXCLUDED.algorithm
+        "#,
+        self.id,
+        self.master_key_id,
+        self.secret_version,
+        self.encrypted_dek,
+        self.encrypted_data,
+        self.dek_nonce,
+        self.data_nonce,
+        self.algorithm
+      )
+      .execute(executor)
+      .await?;
+        Ok(())
     }
 
     pub fn decrypt(&self, keys: &KeyRing) -> Result<String, SecretError> {

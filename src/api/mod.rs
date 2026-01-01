@@ -3,7 +3,6 @@ mod executions;
 mod jobs;
 mod models;
 mod tenants;
-mod verify;
 
 use axum::{
     Json, Router,
@@ -259,7 +258,6 @@ fn init_router() -> OpenApiRouter<Context> {
         .merge(tenants::init_router())
         .merge(jobs::init_router())
         .merge(cron::init_router())
-        .merge(verify::init_router())
         .merge(executions::init_router())
 }
 

@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT * FROM secrets\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "master_key_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "secret_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "encrypted_dek",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 4,
+        "name": "encrypted_data",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 5,
+        "name": "dek_nonce",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 6,
+        "name": "data_nonce",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 7,
+        "name": "algorithm",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c285e3c92c6c8650d1544d9f8fcb04f679baf5e716626b201b5832eca6bdf272"
+}
