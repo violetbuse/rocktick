@@ -7,10 +7,10 @@ use axum::{
 use chrono::TimeDelta;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use sqlx::{postgres::types::PgInterval, types::BigDecimal};
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
-use zeroize::Zeroize;
 
 use crate::{
     api::{ApiError, Context, JsonBody, TenantId, models::Tenant},
@@ -309,21 +309,43 @@ async fn update_tenant(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct SigningSecretPair {
-    current_signing_key: String,
-    next_signing_key: String,
+// struct SigningSecretPair {
+//     current_signing_key: String,
+//     next_signing_key: String,
+// }
+enum SigningSecretData {
+    NotInitialized,
+    Pair {
+        current_signing_key: String,
+        next_signing_key: String,
+    },
 }
 
-impl IntoResponse for SigningSecretPair {
+impl IntoResponse for SigningSecretData {
     fn into_response(self) -> axum::response::Response {
-        (StatusCode::OK, Json(self)).into_response()
-    }
-}
+        // (StatusCode::OK, Json(self)).into_response()
+        match self {
+            SigningSecretData::NotInitialized => {
+                let object = json!({
+                  "keys": Value::Null
+                });
 
-impl Drop for SigningSecretPair {
-    fn drop(&mut self) {
-        self.current_signing_key.zeroize();
-        self.next_signing_key.zeroize();
+                (StatusCode::OK, Json(object)).into_response()
+            }
+            SigningSecretData::Pair {
+                current_signing_key,
+                next_signing_key,
+            } => {
+                let object = json!({
+                  "keys": {
+                    "current": current_signing_key,
+                    "next": next_signing_key
+                  }
+                });
+
+                (StatusCode::OK, Json(object)).into_response()
+            }
+        }
     }
 }
 
@@ -331,7 +353,7 @@ async fn rotate_secrets(
     State(ctx): State<Context>,
     TenantId(requesting_tenant_id): TenantId,
     Path(tenant_id): Path<String>,
-) -> Result<SigningSecretPair, ApiError> {
+) -> Result<SigningSecretData, ApiError> {
     if let Some(requesting_tenant_id) = requesting_tenant_id
         && requesting_tenant_id != tenant_id
     {
@@ -405,9 +427,46 @@ async fn rotate_secrets(
         .await?;
     }
 
-    Ok(SigningSecretPair {
+    Ok(SigningSecretData::Pair {
         current_signing_key: new_current_signing_key,
         next_signing_key: new_next_signing_key,
+    })
+}
+
+async fn get_secrets(
+    State(ctx): State<Context>,
+    TenantId(requesting_tenant_id): TenantId,
+    Path(tenant_id): Path<String>,
+) -> Result<SigningSecretData, ApiError> {
+    if let Some(requesting_tenant_id) = requesting_tenant_id
+        && requesting_tenant_id != tenant_id
+    {
+        return Err(ApiError::tenant_not_allowed());
+    }
+
+    let tenant = sqlx::query!(
+        r#"
+    SELECT current_signing_key, next_signing_key FROM tenants
+    WHERE id = $1
+    "#,
+        tenant_id
+    )
+    .fetch_one(&ctx.pool)
+    .await?;
+
+    if tenant.current_signing_key.is_none() || tenant.next_signing_key.is_none() {
+        return Ok(SigningSecretData::NotInitialized);
+    }
+
+    let current_signing_key = Secret::get(&tenant.current_signing_key.unwrap(), &ctx.pool).await?;
+    let next_signing_key = Secret::get(&tenant.next_signing_key.unwrap(), &ctx.pool).await?;
+
+    let current = current_signing_key.decrypt(&ctx.key_ring)?;
+    let next = next_signing_key.decrypt(&ctx.key_ring)?;
+
+    Ok(SigningSecretData::Pair {
+        current_signing_key: current,
+        next_signing_key: next,
     })
 }
 
@@ -426,6 +485,7 @@ pub fn init_router() -> OpenApiRouter<Context> {
             "/api/tenants/{tenant_id}/signing_secrets/rotate",
             post(rotate_secrets),
         )
+        .route("/api/tenants/{tenant_id}/signing_secrets", get(get_secrets))
 }
 
 const MIN_PERIOD_MS: f32 = 60_000.;
