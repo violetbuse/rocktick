@@ -1,8 +1,6 @@
-version: "3.9"
-
 services:
   db:
-    image: postgres:17
+    image: postgres:18
     container_name: dev-postgres
     environment:
       POSTGRES_USER: postgres
@@ -11,7 +9,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/docker
     restart: unless-stopped
 
 volumes:

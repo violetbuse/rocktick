@@ -35,9 +35,8 @@ pub async fn run_embedded(temporary: bool) -> anyhow::Result<String> {
 
     let mut postgresql = PostgreSQL::new(settings);
 
-    println!("Installing Postgres...");
-    postgresql.setup().await?;
     println!("Starting Postgres...");
+    postgresql.setup().await?;
     postgresql.start().await?;
 
     let db_name = "rocktick";
