@@ -1287,6 +1287,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "indoc"
+version = "2.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79cf5c93f93228cf8efb3ba362535fb11199ac548a09ce117c9b1adc3030d706"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "inout"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2255,7 +2264,7 @@ dependencies = [
 
 [[package]]
 name = "rocktick"
-version = "0.2.11"
+version = "0.2.12"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -2270,6 +2279,7 @@ dependencies = [
  "hex",
  "hmac",
  "http",
+ "indoc",
  "maplit",
  "nanoid",
  "once_cell",

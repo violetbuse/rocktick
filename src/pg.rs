@@ -1,3 +1,4 @@
+use indoc::indoc;
 use postgresql_embedded::{PostgreSQL, Settings, VersionReq};
 use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 
@@ -35,7 +36,13 @@ pub async fn run_embedded(temporary: bool) -> anyhow::Result<String> {
 
     let mut postgresql = PostgreSQL::new(settings);
 
-    println!("Starting Postgres...");
+    let text = indoc! {r#"
+      Starting Embedded Postgres...
+      If you want to connect to an existing db, use one of:
+        --postgres-url "...postgres url"
+        DATABASE_URL="...postgres url"
+    "#};
+    println!("{}", text);
     postgresql.setup().await?;
     postgresql.start().await?;
 
