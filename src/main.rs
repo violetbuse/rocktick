@@ -81,7 +81,11 @@ pub struct DevOptions {
     postgres_temporary: bool,
     #[arg(long, env = "AUTH_KEY")]
     auth_key: Option<String>,
-    #[arg(long, env = "ROCKTICK_SIGNING_KEY", default_value = "00000000")]
+    #[arg(
+        long,
+        env = "ROCKTICK_SIGNING_KEY",
+        default_value = "signature_00000000"
+    )]
     signing_key: String,
     #[arg(long, value_parser, env = "ROCKTICK_KEY_RING")]
     key_ring: Option<KeyRing>,
