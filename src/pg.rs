@@ -1,4 +1,4 @@
-use postgresql_embedded::{PostgreSQL, Settings};
+use postgresql_embedded::{PostgreSQL, Settings, VersionReq};
 use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 
 pub async fn create_pool(postgres_url: String) -> anyhow::Result<Pool<Postgres>> {
@@ -16,14 +16,22 @@ pub async fn migrate_pg(pool: &Pool<Postgres>) -> anyhow::Result<()> {
 }
 
 pub async fn run_embedded(temporary: bool) -> anyhow::Result<String> {
-    let mut settings = Settings::default();
+    // let mut settings = Settings::default();
 
     let mut data_dir = std::env::current_dir()?;
     data_dir.push(".rocktick");
     data_dir.push("pg");
-    settings.data_dir = data_dir;
-    settings.temporary = temporary;
-    settings.password = "postgres".to_string();
+    // settings.data_dir = data_dir;
+    // settings.temporary = temporary;
+    // settings.password = "postgres".to_string();
+
+    let settings = Settings {
+        version: VersionReq::parse("=18.1.0")?,
+        password: "postgres".to_string(),
+        data_dir,
+        temporary,
+        ..Default::default()
+    };
 
     let mut postgresql = PostgreSQL::new(settings);
 
