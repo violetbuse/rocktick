@@ -3,6 +3,7 @@ use std::{env, fs};
 use postgresql_embedded::VersionReq;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("cargo:rerun-if-changed=.cargo");
     let out_dir = env::var("OUT_DIR")?;
 
     println!("cargo:rerun-if-changed=Cargo.toml");
