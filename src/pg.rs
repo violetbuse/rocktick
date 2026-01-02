@@ -26,7 +26,7 @@ pub async fn run_embedded(temporary: bool) -> anyhow::Result<String> {
     // settings.password = "postgres".to_string();
 
     let settings = Settings {
-        version: VersionReq::parse("=18.1.0")?,
+        version: VersionReq::parse(env!("POSTGRESQL_VERSION"))?,
         password: "postgres".to_string(),
         data_dir,
         temporary,

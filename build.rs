@@ -1,4 +1,6 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("cargo:rustc-env=POSTGRESQL_VERSION==18.1.0");
+
     println!("cargo:rerun-if-changed=Cargo.toml");
     println!("cargo:rerun-if-changed=proto");
     tonic_prost_build::compile_protos("proto/broker.proto")?;
