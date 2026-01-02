@@ -2,6 +2,8 @@ use indoc::indoc;
 use postgresql_embedded::{PostgreSQL, Settings, VersionReq};
 use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 
+include!(concat!(env!("OUT_DIR"), "/embedded_postgres_version.rs"));
+
 pub async fn create_pool(postgres_url: String) -> anyhow::Result<Pool<Postgres>> {
     Ok(PgPoolOptions::new()
         .max_connections(10)
@@ -17,17 +19,13 @@ pub async fn migrate_pg(pool: &Pool<Postgres>) -> anyhow::Result<()> {
 }
 
 pub async fn run_embedded(temporary: bool) -> anyhow::Result<String> {
-    // let mut settings = Settings::default();
-
     let mut data_dir = std::env::current_dir()?;
     data_dir.push(".rocktick");
     data_dir.push("pg");
-    // settings.data_dir = data_dir;
-    // settings.temporary = temporary;
-    // settings.password = "postgres".to_string();
 
     let settings = Settings {
-        version: VersionReq::parse(env!("POSTGRESQL_VERSION"))?,
+        version: VersionReq::parse(EMBEDDED_POSTGRES_VERSION)
+            .expect("Failed to parse embedded postgres version?"),
         password: "postgres".to_string(),
         data_dir,
         temporary,

@@ -1,6 +1,6 @@
 [package]
 name = "rocktick"
-version = "0.2.12"
+version = "0.2.13"
 edition = "2024"
 
 [dependencies]
@@ -46,3 +46,4 @@ zeroize = "1.8.2"
 
 [build-dependencies]
 tonic-prost-build = "0.14.2"
+postgresql_embedded = { version = "0.20.0", default-features = false, features = ["rustls", "theseus", "tokio", "bundled"] }
