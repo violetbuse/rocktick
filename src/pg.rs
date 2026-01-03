@@ -4,12 +4,21 @@ use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 
 include!(concat!(env!("OUT_DIR"), "/embedded_postgres_version.rs"));
 
-pub async fn create_pool(postgres_url: String) -> anyhow::Result<Pool<Postgres>> {
-    Ok(PgPoolOptions::new()
-        .max_connections(10)
-        .min_connections(2)
+pub async fn create_pool(postgres_url: String, count: u32) -> anyhow::Result<Pool<Postgres>> {
+    let pool = PgPoolOptions::new()
+        .min_connections(count)
         .connect(&postgres_url)
-        .await?)
+        .await?;
+
+    let cleanup_pool = pool.clone();
+
+    tokio::spawn(async move {
+        let _ = tokio::signal::ctrl_c().await;
+        println!("Closing postgres connection.");
+        cleanup_pool.close().await;
+    });
+
+    Ok(pool)
 }
 
 pub async fn migrate_pg(pool: &Pool<Postgres>) -> anyhow::Result<()> {
