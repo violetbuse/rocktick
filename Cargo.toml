@@ -1,6 +1,6 @@
 [package]
 name = "rocktick"
-version = "0.2.17"
+version = "0.2.18"
 edition = "2024"
 
 [dependencies]
@@ -30,7 +30,7 @@ serde = { version = "1.0.228", features = ["serde_derive"] }
 serde_json = "1.0.145"
 serde_with = "3.16.1"
 sha2 = "0.10.9"
-sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio", "tls-rustls", "derive", "macros", "migrate", "uuid", "json", "chrono", "bigdecimal"] }
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio", "tls-rustls", "derive", "macros", "migrate", "uuid", "json", "chrono", "bigdecimal", "ipnetwork"] }
 thiserror = "2.0.17"
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "signal"] }
 tokio-stream = "0.1.17"

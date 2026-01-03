@@ -2,11 +2,25 @@ syntax = "proto3";
 package broker;
 
 service Broker {
+  rpc DroneCheckin(DroneCheckinRequest) returns (DroneCheckinResponse);
   rpc GetJobs(GetJobsRequest) returns (stream JobSpec);
   rpc RecordExecution(stream JobExecution) returns (Empty);
 }
 
-message GetJobsRequest { string region = 1; }
+message DroneCheckinRequest {
+  string drone_id = 1;
+  string drone_ip = 2;
+  string drone_region = 3;
+  int64 drone_time_ms = 4;
+}
+
+message DroneCheckinResponse {
+  int64 checkin_again_at = 1;
+}
+
+message GetJobsRequest {
+  string region = 1;
+}
 
 message JobSpec {
   string job_id = 1;

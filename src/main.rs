@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::sync::OnceLock;
+use std::{net::IpAddr, sync::OnceLock};
 
 use anyhow::{Ok, anyhow};
 use clap::{Parser, Subcommand};
@@ -11,7 +11,7 @@ use crate::secrets::KeyRing;
 
 mod api;
 mod broker;
-mod executor;
+mod drone;
 mod id;
 mod pg;
 mod scheduler;
@@ -42,20 +42,20 @@ pub struct Cli {
 
 #[derive(Debug, Clone, Subcommand, PartialEq, Eq)]
 pub enum Commands {
-    /// Runs the dev server
+    /// Runs the dev server.
     Dev(DevOptions),
     /// Runs the full server (broker, scheduler, and API)
-    /// but not separately
+    /// in one process.
     Server(ServerOptions),
-    /// Runs only the broker service
+    /// Runs only the broker service.
     Broker(BrokerOptions),
-    /// Runs only the scheduler service
+    /// Runs only the scheduler service.
     Scheduler(SchedulerOptions),
-    /// Runs only the api service
+    /// Runs only the api service.
     Api(ApiOptions),
-    /// Runs only the executor service
-    Executor(ExecutorOptions),
-    /// Migrate the postgres database
+    /// Runs only the drone service.
+    Drone(DroneOptions),
+    /// Migrate the postgres database.
     Migrate(MigrationOptions),
 }
 
@@ -289,20 +289,28 @@ impl From<ServerOptions> for ApiOptions {
 }
 
 #[derive(Debug, Clone, Parser, PartialEq, Eq)]
-pub struct ExecutorOptions {
+pub struct DroneOptions {
     #[arg(long, default_value = "http://[::1]:30001", env = "BROKER_URL")]
     broker_url: String,
     #[arg(long, env = "EXECUTOR_REGION")]
     region: String,
+    #[arg(long, env = "DRONE_ID")]
+    id: String,
+    #[arg(long, value_parser, env = "DRONE_IP_ADDR")]
+    ip: IpAddr,
 }
 
-impl TryFrom<DevOptions> for ExecutorOptions {
+impl TryFrom<DevOptions> for DroneOptions {
     type Error = anyhow::Error;
 
     fn try_from(value: DevOptions) -> Result<Self, Self::Error> {
         Ok(Self {
             broker_url: format!("http://[::1]:{}", value.broker_port),
             region: value.region,
+            id: "dev-drone".to_string(),
+            ip: "127.0.0.1"
+                .parse()
+                .expect("127.0.0.1 is not a valid ip apparently???"),
         })
     }
 }
@@ -366,7 +374,7 @@ async fn run() -> anyhow::Result<()> {
                 api::Config::from_cli(dev_options.clone().try_into()?, pool.clone()).await;
             let broker_config =
                 broker::Config::from_cli(dev_options.clone().try_into()?, pool.clone()).await;
-            let executor_config = executor::Config::from_cli(dev_options.clone().try_into()?).await;
+            let executor_config = drone::Config::from_cli(dev_options.clone().try_into()?).await;
             let scheduler_config =
                 scheduler::Config::from_cli(dev_options.clone().try_into()?, pool.clone()).await;
 
@@ -379,7 +387,7 @@ async fn run() -> anyhow::Result<()> {
                 println!("Broker Service Stopped.");
                 broker_res?;
               },
-              executor_res = executor::start(executor_config) => {
+              executor_res = drone::start(executor_config) => {
                 println!("Executor Service Stopped.");
                 executor_res?;
               },
@@ -441,9 +449,9 @@ async fn run() -> anyhow::Result<()> {
             scheduler::start(config).await?;
             println!("Scheduler Service Stopped.");
         }
-        Some(Commands::Executor(executor_config)) => {
-            let config = executor::Config::from_cli(executor_config).await;
-            executor::start(config).await?;
+        Some(Commands::Drone(executor_config)) => {
+            let config = drone::Config::from_cli(executor_config).await;
+            drone::start(config).await?;
             println!("Executor Service Stopped.");
         }
         Some(Commands::Migrate(migrate_config)) => {

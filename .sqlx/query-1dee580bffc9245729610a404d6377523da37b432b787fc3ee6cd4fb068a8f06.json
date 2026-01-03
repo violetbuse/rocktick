@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          INSERT INTO drones (id, ip, region, last_checkin, checkin_by)\n          VALUES ($1, $2, $3, now(), now() + interval '15 seconds')\n          ON CONFLICT (id) DO UPDATE SET\n            ip = EXCLUDED.ip,\n            region = EXCLUDED.region,\n            last_checkin = now(),\n            checkin_by = now() + interval '15 seconds';\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Inet",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1dee580bffc9245729610a404d6377523da37b432b787fc3ee6cd4fb068a8f06"
+}

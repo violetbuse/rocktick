@@ -1,7 +1,10 @@
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use replace_err::ReplaceErr;
+use sqlx::types::ipnetwork::IpNetwork;
 use sqlx::{Pool, Postgres};
 use tokio::select;
 use tokio::sync::mpsc;
@@ -46,6 +49,50 @@ struct Broker {
 
 #[tonic::async_trait]
 impl BrokerTrait for Broker {
+    async fn drone_checkin(
+        &self,
+        req: tonic::Request<DroneCheckinRequest>,
+    ) -> Result<tonic::Response<DroneCheckinResponse>, Status> {
+        let drone_info = req.into_inner();
+
+        let drone_ip: IpAddr =
+            drone_info
+                .drone_ip
+                .parse()
+                .replace_err(Status::invalid_argument(format!(
+                    "drone ip {} is not a valid ip address",
+                    drone_info.drone_ip
+                )))?;
+        let ip_network: IpNetwork = drone_ip.into();
+
+        sqlx::query!(
+            r#"
+          INSERT INTO drones (id, ip, region, last_checkin, checkin_by)
+          VALUES ($1, $2, $3, now(), now() + interval '15 seconds')
+          ON CONFLICT (id) DO UPDATE SET
+            ip = EXCLUDED.ip,
+            region = EXCLUDED.region,
+            last_checkin = now(),
+            checkin_by = now() + interval '15 seconds';
+        "#,
+            drone_info.drone_id,
+            ip_network,
+            drone_info.drone_region
+        )
+        .execute(&self.pool)
+        .await
+        .replace_err(Status::internal("Unable to upsert drone for some reason."))?;
+
+        let drone_time = DateTime::from_timestamp_millis(drone_info.drone_time_ms)
+            .expect("Received invalid time from drone???");
+
+        let report_back_in = drone_time + chrono::Duration::seconds(9);
+
+        Ok(tonic::Response::new(DroneCheckinResponse {
+            checkin_again_at: report_back_in.timestamp_millis(),
+        }))
+    }
+
     type GetJobsStream = ReceiverStream<Result<JobSpec, Status>>;
 
     async fn get_jobs(
@@ -54,7 +101,9 @@ impl BrokerTrait for Broker {
     ) -> Result<tonic::Response<Self::GetJobsStream>, Status> {
         let (tx, rx) = mpsc::channel(8);
 
-        let region = req.into_inner().region;
+        let data = req.into_inner();
+
+        let region = data.region;
         let pool = self.pool.clone();
 
         let key_ring = self.key_ring.clone();
@@ -169,6 +218,7 @@ impl BrokerTrait for Broker {
                     let signature: Option<String> = if let Some(signing_key) = signing_secret {
                         let signature_result = SignatureBuilder {
                             signing_key,
+                            method: job.method.clone(),
                             time: Utc::now(),
                             url: job.url.clone(),
                             body: job.body.clone(),
@@ -417,7 +467,7 @@ pub async fn start(config: Config) -> anyhow::Result<()> {
     let addr = format!("{}:{}", config.hostname, config.port).parse()?;
 
     if GLOBAL_CONFIG.get().unwrap().is_dev {
-        println!("Signing Key: {}", &config.fallback_signing_key)
+        println!("Outgoing Signing Key: {}", &config.fallback_signing_key)
     }
 
     let cleanup_fut = run_cleanup(config.pool.clone());

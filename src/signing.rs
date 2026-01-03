@@ -1,3 +1,5 @@
+/// Signatures are the Hmac-Sha256 of:
+/// method(lowercase).unix_timestamp.pathname(ascii,percent-encoded,no-query-params).body-string
 use chrono::{DateTime, Utc};
 use hmac::{Hmac, Mac};
 use serde_json::json;
@@ -7,6 +9,7 @@ use url::Url;
 pub struct SignatureBuilder {
     pub signing_key: String,
     pub time: DateTime<Utc>,
+    pub method: String,
     pub url: String,
     pub body: Option<String>,
 }
@@ -22,7 +25,7 @@ impl SignatureBuilder {
         let mut mac = HmacSha256::new_from_slice(self.signing_key.as_bytes())
             .expect("Hmac could not take signing key?");
 
-        let mut message = "".to_string();
+        let mut message = self.method.to_lowercase();
         message.push_str(&format!(".{}", scheduled_at));
         message.push_str(&format!(".{}", &pathname));
 

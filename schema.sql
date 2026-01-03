@@ -1,4 +1,13 @@
 
+CREATE TABLE drones (
+  id VARCHAR(255) NOT NULL PRIMARY KEY,
+  ip inet NOT NULL,
+  region TEXT NOT NULL,
+  last_checkin TIMESTAMPTZ NOT NULL,
+  checkin_by TIMESTAMPTZ NOT NULL,
+  CONSTRAINT checkin_by_after_last_checkin CHECK (checkin_by > last_checkin)
+);
+
 CREATE TABLE secrets (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
   master_key_id INTEGER NOT NULL,
