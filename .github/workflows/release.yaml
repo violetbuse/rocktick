@@ -60,7 +60,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: test
     strategy:
-      fail-fast: false
       matrix:
         include:
           - name: linux-x86_64
@@ -157,6 +156,8 @@ jobs:
         run: |
           cargo build --release --target ${{ matrix.target }}
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.READONLY_PAT }}
 
       - name: Install zip
         if: runner.os == 'Windows'
