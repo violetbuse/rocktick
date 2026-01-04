@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use tonic::Request;
 
 use crate::{
-    broker::{DroneCheckinRequest, broker_client::BrokerClient},
+    broker::grpc::{self, broker_client::BrokerClient},
     drone::DroneState,
 };
 
@@ -13,7 +13,7 @@ async fn check_in(state: &DroneState) -> anyhow::Result<Duration> {
     let mut client = BrokerClient::connect(state.broker_url.clone()).await?;
 
     let checkin_response = client
-        .drone_checkin(Request::new(DroneCheckinRequest {
+        .drone_checkin(Request::new(grpc::DroneCheckinRequest {
             drone_id: state.id.clone(),
             drone_ip: state.ip.to_string(),
             drone_region: state.region.clone(),

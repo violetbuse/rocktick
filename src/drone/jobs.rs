@@ -11,7 +11,7 @@ use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tonic::Request;
 
 use crate::{
-    broker::{self, GetJobsRequest, JobExecution, JobSpec, broker_client::BrokerClient},
+    broker::grpc::{self, broker_client::BrokerClient},
     drone::{DroneState, util::resolve_public_ip},
 };
 
@@ -59,7 +59,7 @@ async fn send_request_to_ip(
     Ok(response)
 }
 
-async fn run_job(job: JobSpec, state: DroneState) {
+async fn run_job(job: grpc::JobSpec, state: DroneState) {
     // check if the ip address is unallowed
     let public_addr = resolve_public_ip(&job.url)
         .await
@@ -136,11 +136,11 @@ async fn run_job(job: JobSpec, state: DroneState) {
 
             let text = String::from_utf8_lossy(&body_bytes).to_string();
 
-            JobExecution {
+            grpc::JobExecution {
                 job_id: job.job_id,
                 success,
                 lock_nonce: job.lock_nonce,
-                response: Some(broker::Response {
+                response: Some(grpc::Response {
                     status,
                     headers,
                     body: text,
@@ -153,7 +153,7 @@ async fn run_job(job: JobSpec, state: DroneState) {
                 executed_at,
             }
         }
-        Err(error) => JobExecution {
+        Err(error) => grpc::JobExecution {
             job_id: job.job_id,
             success: false,
             lock_nonce: job.lock_nonce,
@@ -173,7 +173,7 @@ async fn run_job(job: JobSpec, state: DroneState) {
 async fn fetch_and_start_jobs(state: DroneState) -> anyhow::Result<()> {
     let mut client = BrokerClient::connect(state.broker_url.clone()).await?;
     let mut jobs_stream = client
-        .get_jobs(Request::new(GetJobsRequest {
+        .get_jobs(Request::new(grpc::GetJobsRequest {
             region: state.region.clone(),
         }))
         .await?
@@ -208,7 +208,8 @@ async fn poll_jobs_loop(state: DroneState) -> anyhow::Result<()> {
 
 async fn submit_job_results(state: DroneState) -> anyhow::Result<()> {
     let mut client = BrokerClient::connect(state.broker_url.clone()).await?;
-    let execution_results: Vec<JobExecution> = state.exec_results.lock().await.drain(..).collect();
+    let execution_results: Vec<grpc::JobExecution> =
+        state.exec_results.lock().await.drain(..).collect();
 
     if !execution_results.is_empty() {
         let (tx, rx) = mpsc::channel(1);

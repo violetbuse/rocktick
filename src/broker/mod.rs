@@ -1,5 +1,6 @@
 mod actor;
 mod drone;
+pub mod grpc;
 mod job;
 mod workflow;
 
@@ -8,11 +9,9 @@ use tokio::select;
 use tonic::Status;
 use tonic::transport::Server;
 
-use crate::broker::broker_server::{Broker as BrokerTrait, BrokerServer};
+use crate::broker::grpc::broker_server::{Broker as BrokerTrait, BrokerServer};
 use crate::secrets::KeyRing;
 use crate::{BrokerOptions, GLOBAL_CONFIG};
-
-tonic::include_proto!("broker");
 
 pub struct Config {
     port: usize,
@@ -45,8 +44,8 @@ struct BrokerService {
 impl BrokerTrait for BrokerService {
     async fn drone_checkin(
         &self,
-        req: tonic::Request<DroneCheckinRequest>,
-    ) -> Result<tonic::Response<DroneCheckinResponse>, Status> {
+        req: tonic::Request<grpc::DroneCheckinRequest>,
+    ) -> Result<tonic::Response<grpc::DroneCheckinResponse>, Status> {
         drone::handle_checkin(self, req).await
     }
 
@@ -54,15 +53,15 @@ impl BrokerTrait for BrokerService {
 
     async fn get_jobs(
         &self,
-        req: tonic::Request<GetJobsRequest>,
+        req: tonic::Request<grpc::GetJobsRequest>,
     ) -> Result<tonic::Response<Self::GetJobsStream>, Status> {
         job::get_jobs(self, req).await
     }
 
     async fn record_execution(
         &self,
-        req: tonic::Request<tonic::Streaming<JobExecution>>,
-    ) -> Result<tonic::Response<Empty>, Status> {
+        req: tonic::Request<tonic::Streaming<grpc::JobExecution>>,
+    ) -> Result<tonic::Response<grpc::Empty>, Status> {
         job::record_execution(self, req).await
     }
 }

@@ -7,17 +7,17 @@ use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tonic::Status;
 
 use crate::{
-    broker::{BrokerService, Empty, GetJobsRequest, JobExecution, JobSpec},
+    broker::{BrokerService, grpc},
     id,
     secrets::Secret,
     signing::SignatureBuilder,
 };
 
-pub type GetJobsStream = ReceiverStream<Result<JobSpec, Status>>;
+pub type GetJobsStream = ReceiverStream<Result<grpc::JobSpec, Status>>;
 
 pub async fn get_jobs(
     svc: &BrokerService,
-    req: tonic::Request<GetJobsRequest>,
+    req: tonic::Request<grpc::GetJobsRequest>,
 ) -> Result<tonic::Response<GetJobsStream>, Status> {
     let (tx, rx) = mpsc::channel(8);
 
@@ -221,7 +221,7 @@ pub async fn get_jobs(
                     req_headers.insert("Rocktick-Signature".to_string(), signature_header);
                 }
 
-                let job_spec = JobSpec {
+                let job_spec = grpc::JobSpec {
                     job_id: job.job_id,
                     lock_nonce: job.lock_nonce.unwrap() as i64,
                     scheduled_at: job.scheduled_at.timestamp(),
@@ -247,8 +247,8 @@ pub async fn get_jobs(
 
 pub async fn record_execution(
     svc: &BrokerService,
-    req: tonic::Request<tonic::Streaming<JobExecution>>,
-) -> Result<tonic::Response<Empty>, Status> {
+    req: tonic::Request<tonic::Streaming<grpc::JobExecution>>,
+) -> Result<tonic::Response<grpc::Empty>, Status> {
     let mut executions = req.into_inner();
     let pool = svc.pool.clone();
 
@@ -389,7 +389,7 @@ pub async fn record_execution(
         }
     });
 
-    Ok(tonic::Response::new(Empty {}))
+    Ok(tonic::Response::new(grpc::Empty {}))
 }
 
 pub async fn run_job_cleanup_loop(pool: Pool<Postgres>) -> anyhow::Result<()> {

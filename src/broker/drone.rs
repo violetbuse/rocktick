@@ -5,12 +5,12 @@ use replace_err::ReplaceErr;
 use sqlx::types::ipnetwork::IpNetwork;
 use tonic::Status;
 
-use crate::broker::{BrokerService, DroneCheckinRequest, DroneCheckinResponse};
+use crate::broker::{BrokerService, grpc};
 
 pub async fn handle_checkin(
     svc: &BrokerService,
-    req: tonic::Request<DroneCheckinRequest>,
-) -> Result<tonic::Response<DroneCheckinResponse>, Status> {
+    req: tonic::Request<grpc::DroneCheckinRequest>,
+) -> Result<tonic::Response<grpc::DroneCheckinResponse>, Status> {
     let drone_info = req.into_inner();
 
     let drone_ip: IpAddr = drone_info
@@ -45,7 +45,7 @@ pub async fn handle_checkin(
 
     let report_back_in = drone_time + chrono::Duration::seconds(9);
 
-    Ok(tonic::Response::new(DroneCheckinResponse {
+    Ok(tonic::Response::new(grpc::DroneCheckinResponse {
         checkin_again_at: report_back_in.timestamp_millis(),
     }))
 }

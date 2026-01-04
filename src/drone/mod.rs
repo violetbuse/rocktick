@@ -1,5 +1,6 @@
 mod actors;
 mod checkin;
+pub mod grpc;
 mod jobs;
 mod util;
 mod workflows;
@@ -11,7 +12,7 @@ use tokio::{
     sync::{Mutex, mpsc},
 };
 
-use crate::{DroneOptions, broker::JobExecution};
+use crate::{DroneOptions, broker::grpc as broker_grpc};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -36,7 +37,7 @@ impl Config {
 struct DroneState {
     id: String,
     ip: IpAddr,
-    exec_results: Arc<Mutex<Vec<JobExecution>>>,
+    exec_results: Arc<Mutex<Vec<broker_grpc::JobExecution>>>,
     broker_url: String,
     region: String,
     error_tx: mpsc::Sender<anyhow::Error>,
