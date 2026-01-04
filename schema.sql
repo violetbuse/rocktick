@@ -98,6 +98,7 @@ CREATE TABLE scheduled_jobs (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
   hash INTEGER NOT NULL,
   lock_nonce INTEGER,
+  times_locked INTEGER NOT NULL DEFAULT 0,
   region TEXT NOT NULL,
   tenant_id VARCHAR(255) REFERENCES tenants(id),
   one_off_job_id VARCHAR(255) REFERENCES one_off_jobs(id),

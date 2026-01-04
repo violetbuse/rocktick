@@ -77,6 +77,11 @@
         "ordinal": 14,
         "name": "deleted_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "times_locked",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -99,7 +104,8 @@
       true,
       true,
       true,
-      true
+      true,
+      false
     ]
   },
   "hash": "048ca4d28329a0597b66f634c8c11cf8f6b8eb490925d76f6ef33f929007e401"

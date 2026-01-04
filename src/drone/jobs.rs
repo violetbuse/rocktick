@@ -71,11 +71,13 @@ async fn run_job(job: JobSpec, state: DroneState) {
         .expect("System time before unix expoch")
         .as_millis() as i64;
     let remaining = job.scheduled_at * 1000 - now;
-    if remaining > 0 {
+    if remaining > 5000 {
+        millis_until = 5000;
+    } else if remaining > 0 {
         millis_until = remaining as u64
     }
 
-    millis_until += rand::random_range(0..350);
+    millis_until += rand::random_range(0..450);
 
     tokio::time::sleep(Duration::from_millis(millis_until)).await;
 
@@ -242,7 +244,7 @@ async fn submit_job_results(state: DroneState) -> anyhow::Result<()> {
 
 async fn submit_job_results_loop(state: DroneState) -> anyhow::Result<()> {
     loop {
-        tokio::time::sleep(Duration::from_secs(3)).await;
+        tokio::time::sleep(Duration::from_secs(2)).await;
         submit_job_results(state.clone()).await?;
     }
 }

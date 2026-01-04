@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n              WITH cleanup_candidates AS (\n                SELECT\n                  job.id AS job_id,\n                  job.tenant_id\n                FROM scheduled_jobs AS job\n                LEFT JOIN tenants tenant\n                  ON tenant.id = job.tenant_id\n                WHERE job.lock_nonce IS NOT NULL\n                  AND job.execution_id IS NULL\n                  AND to_timestamp(job.lock_nonce)\n                      + make_interval(secs => COALESCE(job.timeout_ms, tenant.max_timeout, 120000) / 1000)\n                      -- 90 second safety interval just in case it takes a while to report or smth.\n                      + interval '90 seconds'\n                      < now()\n              ),\n              locked_candidates AS (\n                SELECT *\n                FROM cleanup_candidates\n                FOR UPDATE SKIP LOCKED\n              ),\n              reset_jobs AS (\n                UPDATE scheduled_jobs as job\n                SET lock_nonce = NULL\n                FROM locked_candidates\n                WHERE job.id = locked_candidates.job_id\n                RETURNING locked_candidates.tenant_id\n              ),\n              refunds AS (\n                SELECT tenant_id, count(*) AS refund_tokens\n                FROM reset_jobs\n                WHERE tenant_id IS NOT NULL\n                GROUP BY tenant_id\n              )\n              UPDATE tenants\n              SET tokens = LEAST(tenants.max_tokens, tokens + refunds.refund_tokens)\n              FROM refunds\n              WHERE tenants.id = refunds.tenant_id\n          ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2c0dfac770d4876fda91b24c193ae5cdeef103df3c6a807c700d1a11a42413d5"
+}

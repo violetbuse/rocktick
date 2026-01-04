@@ -61,6 +61,7 @@ pub struct SchedulerContext {
 #[async_trait::async_trait]
 pub trait Scheduler {
     const WAIT: Duration = Duration::ZERO;
+    const IDLE_DELAY: Duration = Duration::from_secs(3);
     async fn run_once(ctx: &SchedulerContext, reached_end: &mut bool) -> anyhow::Result<()>;
 }
 
@@ -71,7 +72,7 @@ async fn scheduling_loop<S: Scheduler>(ctx: &SchedulerContext) -> anyhow::Result
         S::run_once(ctx, &mut reached_end).await?;
         if reached_end {
             reached_end = false;
-            tokio::time::sleep(Duration::from_secs(3)).await;
+            tokio::time::sleep(S::IDLE_DELAY).await;
         }
     }
 }

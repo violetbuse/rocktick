@@ -1,4 +1,4 @@
-h1:uOjHo4YjtbbFENXtMzGOrMPqdazBG6GCSUAp2JNpaYA=
+h1:2jLjv4R/itALdyYVlJVlbba7Rp/iucN718u24x6DzEo=
 20251203210042_initialized_project.sql h1:JphUmqibBPSs2wG6eWQFyijH8UzApjfiUnyUxAq1WuM=
 20251204091639_add_url_to_request.sql h1:wDFdyCr7r9hqY5BlH+yu07/iFFVKpmueT1gybTzSnSI=
 20251204091857_add_scheduled_stuff.sql h1:Ykvy8wTbx7hQmdn00SC/XiAllJfsTxEX1XceqrOMKLc=
@@ -38,3 +38,4 @@ h1:uOjHo4YjtbbFENXtMzGOrMPqdazBG6GCSUAp2JNpaYA=
 20251224165921_remove_max_cron_jobs_default.sql h1:WeNcoQKx2Q7FLWjaorLfhxqE1W2Lk+lGcMUerkD3QQo=
 20260101144149_add_secrets.sql h1:J5/T/3Ra6ZziJVEVGkZ+ex25OMSVBjoT1E8zzwVSEYc=
 20260103223048_add_drones_table.sql h1:C0RHuNuQ8hoPl6fVumfDgcNpjyuGyUPTYxmumggx+uM=
+20260104131528_add_scheduled_jobs_times_locked.sql h1:T0/5i/Lt25elXb7KeSq52bbbxQlTmDi4ABE3S4z1Iho=

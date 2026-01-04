@@ -111,34 +111,68 @@ impl BrokerTrait for Broker {
         tokio::spawn(async move {
             let mut stream = sqlx::query!(
                 r#"
-              WITH jobs_to_lock AS (
-                SELECT job.id as id, tenants.id as tenant_id, job.request_id
-                FROM scheduled_jobs as job
-                LEFT JOIN tenants ON
-                  job.tenant_id = tenants.id
-                WHERE lock_nonce IS NULL
+              WITH active_tenants AS (
+                SELECT id, tokens FROM tenants
+                WHERE tokens > 0
+                FOR UPDATE SKIP LOCKED
+              ),
+              candidate_ids AS (
+                SELECT job_lat.*
+                FROM active_tenants t
+                CROSS JOIN LATERAL (
+                  SELECT
+                    job.id,
+                    job.scheduled_at
+                  FROM scheduled_jobs job
+                  WHERE job.tenant_id = t.id
+                    AND job.lock_nonce IS NULL
+                    AND job.execution_id IS NULL
+                    AND (
+                      (job.region = $1 AND job.scheduled_at <= now() + interval '3 seconds')
+                      OR (job.scheduled_at <= now() - interval '5 seconds')
+                    )
+                  ORDER BY job.scheduled_at ASC, job.id ASC
+                  LIMIT t.tokens
+                ) job_lat
+                UNION ALL
+                SELECT id, scheduled_at
+                FROM scheduled_jobs
+                WHERE tenant_id IS NULL
+                  AND lock_nonce IS NULL
                   AND execution_id IS NULL
-                  AND (tenants.tokens > 0 OR tenants.tokens IS NULL)
                   AND (
                     (region = $1 AND scheduled_at <= now() + interval '3 seconds')
-                    OR (scheduled_at <= now() - interval '5 seconds')
+                    OR (scheduled_At <= now() - interval '5 seconds')
                   )
-                ORDER BY scheduled_at ASC
-                FOR UPDATE OF job SKIP LOCKED
+                ORDER BY scheduled_at ASC, id ASC
+                LIMIT 100
+              ),
+              jobs_to_lock AS (
+                SELECT id FROM scheduled_jobs
+                WHERE id IN (SELECT id FROM candidate_ids)
+                FOR UPDATE SKIP LOCKED
+              ),
+              updated_jobs AS (
+                UPDATE scheduled_jobs
+                SET
+                  lock_nonce = extract(epoch from now()),
+                  times_locked = times_locked + 1
+                WHERE id IN (SELECT id FROM jobs_to_lock)
+                RETURNING id, tenant_id
+              ),
+              updated_tenants AS (
+                UPDATE tenants tenant
+                SET tokens = GREATEST(0, tokens - sub.used_tokens)
+                FROM (
+                  SELECT tenant_id, count(*) AS used_tokens
+                  FROM updated_jobs
+                  WHERE tenant_id IS NOT NULL
+                  GROUP BY tenant_id
+                ) sub
+                WHERE tenant.id = sub.tenant_id
+                RETURNING tenant.id
               )
-              UPDATE scheduled_jobs AS job
-              SET lock_nonce = extract(epoch from now())
-              FROM
-                jobs_to_lock AS to_lock
-              JOIN http_requests AS req
-                ON req.id = to_lock.request_id
-              LEFT JOIN tenants AS tenant
-                ON tenant.id = to_lock.tenant_id
-              LEFT JOIN secrets as secret
-                ON secret.id = tenant.current_signing_key
-              WHERE job.id = to_lock.id
-                AND (to_lock.tenant_id IS NULL OR job.tenant_id = to_lock.tenant_id)
-              RETURNING
+              SELECT
                 job.id as job_id,
                 job.lock_nonce,
                 job.scheduled_at,
@@ -158,7 +192,17 @@ impl BrokerTrait for Broker {
                 req.method,
                 req.url,
                 req.headers,
-                req.body;
+                req.body
+              FROM scheduled_jobs job
+              JOIN updated_jobs
+                ON updated_jobs.id = job.id
+              JOIN http_requests AS req
+                ON req.id = job.request_id
+              LEFT JOIN tenants tenant
+                ON tenant.id = job.tenant_id
+              LEFT JOIN secrets secret
+                ON secret.id = tenant.current_signing_key
+              ORDER BY job.scheduled_at ASC;
               "#,
                 region
             )
@@ -373,6 +417,10 @@ impl BrokerTrait for Broker {
                             let execution_id = id::generate("execution");
                             let executed_at = DateTime::from_timestamp_secs(execution.executed_at);
 
+                            if executed_at.is_none() {
+                              eprintln!("Drone returned invalid executed_at time {}", execution.executed_at);
+                            }
+
                             sqlx::query!(
                                 r#"
                                 INSERT INTO job_executions
@@ -404,13 +452,15 @@ impl BrokerTrait for Broker {
                             .execute(&mut *tx)
                             .await?;
 
-                            if let Some(tenant_id) = scheduled.tenant_id {
-                              sqlx::query!(r#"
-                                UPDATE tenants
-                                SET tokens = tokens - 1
-                                WHERE id = $1;
-                                "#, tenant_id).execute(&mut *tx).await?;
-                            }
+                            // We now handle token decrementing in the main broker
+                            // distribution query
+                            // if let Some(tenant_id) = scheduled.tenant_id {
+                            //   sqlx::query!(r#"
+                            //     UPDATE tenants
+                            //     SET tokens = tokens - 1
+                            //     WHERE id = $1;
+                            //     "#, tenant_id).execute(&mut *tx).await?;
+                            // }
 
                             tx.commit().await?;
 
@@ -434,24 +484,51 @@ impl BrokerTrait for Broker {
 
 async fn run_cleanup(pool: Pool<Postgres>) -> anyhow::Result<()> {
     loop {
+        let mut tx = pool.begin().await?;
+
         tokio::time::sleep(Duration::from_secs(15)).await;
         let result = sqlx::query!(
             r#"
               WITH cleanup_candidates AS (
-                SELECT id
-                FROM scheduled_jobs
-                WHERE lock_nonce IS NOT NULL
-                  AND to_timestamp(lock_nonce) + (timeout_ms / 1000 || ' seconds')::interval
-                      < now() - interval '30 seconds'
+                SELECT
+                  job.id AS job_id,
+                  job.tenant_id
+                FROM scheduled_jobs AS job
+                LEFT JOIN tenants tenant
+                  ON tenant.id = job.tenant_id
+                WHERE job.lock_nonce IS NOT NULL
+                  AND job.execution_id IS NULL
+                  AND to_timestamp(job.lock_nonce)
+                      + make_interval(secs => COALESCE(job.timeout_ms, tenant.max_timeout, 120000) / 1000)
+                      -- 90 second safety interval just in case it takes a while to report or smth.
+                      + interval '90 seconds'
+                      < now()
+              ),
+              locked_candidates AS (
+                SELECT *
+                FROM cleanup_candidates
                 FOR UPDATE SKIP LOCKED
+              ),
+              reset_jobs AS (
+                UPDATE scheduled_jobs as job
+                SET lock_nonce = NULL
+                FROM locked_candidates
+                WHERE job.id = locked_candidates.job_id
+                RETURNING locked_candidates.tenant_id
+              ),
+              refunds AS (
+                SELECT tenant_id, count(*) AS refund_tokens
+                FROM reset_jobs
+                WHERE tenant_id IS NOT NULL
+                GROUP BY tenant_id
               )
-              UPDATE scheduled_jobs
-              SET lock_nonce = NULL
-              FROM cleanup_candidates
-              WHERE scheduled_jobs.id = cleanup_candidates.id;
+              UPDATE tenants
+              SET tokens = LEAST(tenants.max_tokens, tokens + refunds.refund_tokens)
+              FROM refunds
+              WHERE tenants.id = refunds.tenant_id
           "#
         )
-        .execute(&pool)
+        .execute(&mut *tx)
         .await?;
 
         if result.rows_affected() > 0 {
@@ -460,6 +537,8 @@ async fn run_cleanup(pool: Pool<Postgres>) -> anyhow::Result<()> {
                 result.rows_affected()
             );
         }
+
+        tx.commit().await?;
     }
 }
 

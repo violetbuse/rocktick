@@ -119,17 +119,17 @@ pub struct ServerOptions {
     key_ring: KeyRing,
     #[arg(long, env = "FALLBACK_SIGNING_KEY")]
     fallback_signing_key: String,
-    #[arg(long, default_value_t = 1, env = "CRON_SCHEDULER_COUNT")]
+    #[arg(long, default_value_t = 2, env = "CRON_SCHEDULER_COUNT")]
     cron_schedulers: usize,
-    #[arg(long, default_value_t = 1, env = "TENANT_SCHEDULER_COUNT")]
+    #[arg(long, default_value_t = 2, env = "TENANT_SCHEDULER_COUNT")]
     tenant_schedulers: usize,
-    #[arg(long, default_value_t = 1, env = "ONE_OFF_SCHEDULER_COUNT")]
+    #[arg(long, default_value_t = 2, env = "ONE_OFF_SCHEDULER_COUNT")]
     one_off_schedulers: usize,
-    #[arg(long, default_value_t = 1, env = "RETRY_SCHEDULER_COUNT")]
+    #[arg(long, default_value_t = 2, env = "RETRY_SCHEDULER_COUNT")]
     retry_schedulers: usize,
-    #[arg(long, default_value_t = 1, env = "PAST_RETENTION_SCHEDULER_COUNT")]
+    #[arg(long, default_value_t = 2, env = "PAST_RETENTION_SCHEDULER_COUNT")]
     past_retention_schedulers: usize,
-    #[arg(long, default_value_t = 1, env = "KEY_ROTATION_SCHEDULER_COUNT")]
+    #[arg(long, default_value_t = 2, env = "KEY_ROTATION_SCHEDULER_COUNT")]
     key_rotation_schedulers: usize,
 }
 
