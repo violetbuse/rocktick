@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                              INSERT INTO http_responses\n                                (id, status, headers, body)\n                              VALUES\n                                ($1, $2, $3, $4);\n                              ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int4",
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4343751eaaa5ece01586d79e4dce42f52c8ac0b7160b3636f6233231a123c530"
+}

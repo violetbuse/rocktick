@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                            SELECT id, lock_nonce, tenant_id\n                            FROM scheduled_jobs\n                            WHERE id = $1\n                              AND lock_nonce = $2\n                            FOR UPDATE;\n                            ",
+  "query": "\n                      SELECT id, lock_nonce, tenant_id\n                      FROM scheduled_jobs\n                      WHERE id = $1\n                        AND lock_nonce = $2\n                      FOR UPDATE;\n                      ",
   "describe": {
     "columns": [
       {
@@ -31,5 +31,5 @@
       true
     ]
   },
-  "hash": "cceed9f93a7ce44b55ee0d627652a4bf955e2ac3270ad10538697c0f02f0f31f"
+  "hash": "9985b4c21d1190f893737d8f68cdf0ea2f8494fb97a0cfa4e210b4ffd58c3f09"
 }
