@@ -1,9 +1,6 @@
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::{collections::HashMap, net::SocketAddr, time::Duration};
 
+use chrono::Utc;
 use replace_err::ReplaceErr;
 use reqwest::Client;
 use tokio::{select, sync::mpsc};
@@ -66,10 +63,7 @@ async fn run_job(job: grpc::JobSpec, state: DroneState) {
         .ok_or("Unable to resolve a public ip address.");
 
     let mut millis_until = 0;
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("System time before unix expoch")
-        .as_millis() as i64;
+    let now = Utc::now().timestamp_millis();
     let remaining = job.scheduled_at * 1000 - now;
     if remaining > 5000 {
         millis_until = 5000;
@@ -82,10 +76,7 @@ async fn run_job(job: grpc::JobSpec, state: DroneState) {
     tokio::time::sleep(Duration::from_millis(millis_until)).await;
 
     println!("Executing job {}", job.job_id);
-    let executed_at = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("System time before unix expoch")
-        .as_secs() as i64;
+    let executed_at = Utc::now().timestamp();
     let response = match public_addr {
         Ok(addr) => {
             send_request_to_ip(

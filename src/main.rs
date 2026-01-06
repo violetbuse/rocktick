@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::{net::IpAddr, sync::OnceLock};
 
 use anyhow::{Ok, anyhow};

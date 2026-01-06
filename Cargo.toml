@@ -3,6 +3,12 @@ name = "rocktick"
 version = "0.2.20"
 edition = "2024"
 
+[lints.rust]
+dead_code = "allow"
+
+[lints.clippy]
+disallowed_types = "warn"
+
 [dependencies]
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"

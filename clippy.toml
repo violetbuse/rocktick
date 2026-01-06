@@ -1,0 +1,9 @@
+
+disallowed-types = [
+    { path = "std::time::SystemTime", reason = "Use chrono::Utc::now() or chrono::DateTime instead." },
+    { path = "std::time::Instant", reason = "Consider using chrono or a specialized crate if high-precision timing is needed." },
+]
+
+disallowed-methods = [
+    { path = "std::time::SystemTime::now", reason = "Use chrono::Utc::now() instead." },
+]
