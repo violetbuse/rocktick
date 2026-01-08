@@ -47,14 +47,16 @@ CREATE TABLE http_requests (
   method VARCHAR(10) NOT NULL,
   url TEXT NOT NULL,
   headers TEXT[] NOT NULL,
-  body TEXT
+  body TEXT,
+  bytes_used INTEGER NOT NULL
 );
 
 CREATE TABLE http_responses (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
   status INTEGER NOT NULL,
   headers TEXT[] NOT NULL,
-  body TEXT NOT NULL
+  body TEXT NOT NULL,
+  bytes_used INTEGER NOT NULL
 );
 
 CREATE TABLE one_off_jobs (
@@ -85,6 +87,31 @@ CREATE TABLE cron_jobs (
   deleted_at TIMESTAMPTZ
 );
 
+-- CREATE TABLE workflows (
+--   id VARCHAR(255) NOT NULL PRIMARY KEY,
+--   tenant_id VARCHAR(255) REFERENCES tenants(id),
+-- );
+
+-- CREATE TYPE workflow_execution_status AS ENUM ('waiting', 'scheduled', 'completed', 'failed');
+
+-- CREATE TABLE workflow_executions (
+--   id VARCHAR(255) NOT NULL PRIMARY KEY,
+--   workflow_id VARCHAR(255) NOT NULL REFERENCES workflows(id),
+--   tenant_id VARCHAR(255) REFERENCES tenants(id),
+--   result_json JSONB
+-- );
+
+-- CREATE TABLE workflow_dependencies (
+--   id VARCHAR(255) NOT NULL PRIMARY KEY,
+--   workflow_execution_id VARCHAR(255) NOT NULL REFERENCES workflow_executions(id),
+--   child_workflow_id VARCHAR(255) REFERENCES workflows(id),
+--   wait_until TIMESTAMPTZ,
+--   CONSTRAINT child_workflow_or_wait_until CHECK (
+--     (child_workflow_id IS NOT NULL AND wait_until IS NULL) OR
+--     (child_workflow_id IS NULL AND wait_until IS NOT NULL)
+--   )
+-- );
+
 CREATE TABLE job_executions (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
   executed_at TIMESTAMPTZ NOT NULL,
@@ -103,6 +130,8 @@ CREATE TABLE scheduled_jobs (
   tenant_id VARCHAR(255) REFERENCES tenants(id),
   one_off_job_id VARCHAR(255) REFERENCES one_off_jobs(id),
   cron_job_id VARCHAR(255) REFERENCES cron_jobs(id),
+  -- workflow_id VARCHAR(255) REFERENCES workflows(id),
+  -- workflow_execution_id VARCHAR(255) REFERENCES workflow_executions(id),
   retry_for_id VARCHAR(255) UNIQUE REFERENCES scheduled_jobs(id),
   scheduled_at TIMESTAMPTZ NOT NULL,
   request_id VARCHAR(255) NOT NULL REFERENCES http_requests(id),
@@ -110,5 +139,9 @@ CREATE TABLE scheduled_jobs (
   timeout_ms INTEGER,
   max_retries INTEGER NOT NULL,
   max_response_bytes INTEGER,
-  deleted_at TIMESTAMPTZ
+  deleted_at TIMESTAMPTZ,
+  -- CONSTRAINT workflow_and_workflow_execution CHECK (
+  --   (workflow_id IS NULL AND workflow_execution_id IS NULL) OR
+  --   (workflow_id IS NOT NULL AND workflow_execution_id IS NOT NULL)
+  -- )
 );

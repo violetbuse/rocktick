@@ -31,7 +31,7 @@ message JobSpec {
   map<string, string> headers = 6;
   optional string body = 7;
   int32 timeout_ms = 8;
-  int64 max_response_bytes = 9;
+  optional int64 max_response_bytes = 9;
 }
 
 message JobExecution {
@@ -44,6 +44,7 @@ message JobExecution {
   string req_url = 7;
   map<string, string> req_headers = 8;
   optional string req_body = 9;
+  int64 req_body_bytes_used = 11;
   int64 executed_at = 10;
 }
 
@@ -51,6 +52,7 @@ message Response {
   int64 status = 1;
   map<string, string> headers = 2;
   string body = 3;
+  int64 bytes_used = 4;
 }
 
 message Empty {}

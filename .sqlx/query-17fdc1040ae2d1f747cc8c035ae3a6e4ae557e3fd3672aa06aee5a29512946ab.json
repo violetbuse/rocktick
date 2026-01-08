@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n      UPDATE one_off_jobs\n      SET\n        region = $2,\n        execute_at = $3,\n        timeout_ms = $4,\n        max_retries = $5,\n        max_response_bytes = $6\n      FROM one_off_jobs as job\n      JOIN http_requests AS req\n        ON req.id = job.request_id\n      WHERE job.id = $1\n      RETURNING\n        job.id,\n        job.region,\n        job.tenant_id,\n        req.id as req_id,\n        req.method,\n        req.url,\n        req.headers,\n        req.body,\n        job.execute_at,\n        job.timeout_ms,\n        job.max_retries,\n        job.max_response_bytes,\n        job.created_at\n      ",
+  "query": "\n    SELECT\n      job.id,\n      job.region,\n      job.tenant_id,\n      req.id as req_id,\n      req.method,\n      req.url,\n      req.headers,\n      req.body,\n      job.execute_at,\n      job.timeout_ms,\n      job.max_retries,\n      job.max_response_bytes,\n      job.created_at,\n      job.deleted_at\n    FROM one_off_jobs as job\n    INNER JOIN http_requests as req\n      ON req.id = job.request_id\n    WHERE\n      job.id = $1 AND\n      ($2::text IS NULL OR job.tenant_id = $2);\n    ",
   "describe": {
     "columns": [
       {
@@ -67,16 +67,17 @@
         "ordinal": 12,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
         "Text",
-        "Text",
-        "Int8",
-        "Int4",
-        "Int4",
-        "Int4"
+        "Text"
       ]
     },
     "nullable": [
@@ -92,8 +93,9 @@
       true,
       false,
       true,
-      false
+      false,
+      true
     ]
   },
-  "hash": "5aa2a6b5adb6e94e6163909bd6e2ffa4f923871c0755988740b65cf7b5c709f0"
+  "hash": "17fdc1040ae2d1f747cc8c035ae3a6e4ae557e3fd3672aa06aee5a29512946ab"
 }

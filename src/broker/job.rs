@@ -7,7 +7,7 @@ use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tonic::Status;
 
 use crate::{
-    broker::{BrokerService, grpc},
+    broker::{BrokerService, grpc, workflow},
     id,
     secrets::Secret,
     signing::SignatureBuilder,
@@ -230,7 +230,7 @@ pub async fn get_jobs(
                     headers: req_headers,
                     body: job.body,
                     timeout_ms: timeout,
-                    max_response_bytes: max_response_bytes as i64,
+                    max_response_bytes: Some(max_response_bytes as i64),
                 };
 
                 if tx.send(Ok(job_spec)).await.is_err() {
@@ -291,15 +291,16 @@ pub async fn record_execution(
                         sqlx::query!(
                             r#"
                         INSERT INTO http_requests
-                          (id, method, url, headers, body)
+                          (id, method, url, headers, body, bytes_used)
                         VALUES
-                          ($1, $2, $3 ,$4, $5)
+                          ($1, $2, $3 ,$4, $5, $6)
                         "#,
                             request_id,
                             execution.req_method,
                             execution.req_url,
                             &req_headers,
-                            execution.req_body
+                            execution.req_body,
+                            execution.req_body_bytes_used as i32
                         )
                         .execute(&mut *tx)
                         .await?;
@@ -319,14 +320,15 @@ pub async fn record_execution(
                             sqlx::query!(
                                 r#"
                               INSERT INTO http_responses
-                                (id, status, headers, body)
+                                (id, status, headers, body, bytes_used)
                               VALUES
-                                ($1, $2, $3, $4);
+                                ($1, $2, $3, $4, $5);
                               "#,
                                 res_id,
                                 response.status as i64,
                                 &headers,
-                                response.body
+                                response.body,
+                                response.bytes_used as i32
                             )
                             .execute(&mut *tx)
                             .await?;
@@ -358,6 +360,9 @@ pub async fn record_execution(
                         )
                         .execute(&mut *tx)
                         .await?;
+
+                        workflow::handle_workflow_execution_side_effect(execution.job_id, &mut tx)
+                            .await?;
 
                         sqlx::query!(
                             r#"

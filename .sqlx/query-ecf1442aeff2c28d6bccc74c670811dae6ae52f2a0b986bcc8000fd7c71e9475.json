@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        INSERT INTO http_requests\n                          (id, method, url, headers, body, bytes_used)\n                        VALUES\n                          ($1, $2, $3 ,$4, $5, $6)\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Text",
+        "TextArray",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ecf1442aeff2c28d6bccc74c670811dae6ae52f2a0b986bcc8000fd7c71e9475"
+}

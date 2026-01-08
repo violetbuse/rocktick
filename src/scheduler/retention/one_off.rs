@@ -1,13 +1,16 @@
 use std::time::Duration;
 
-use crate::scheduler::{Scheduler, SchedulerContext};
+use crate::{
+    scheduler::{Scheduler, SchedulerContext},
+    util::http_requests::delete_http_req,
+};
 
 #[derive(Clone, Copy)]
 pub struct OneOffPastRetention;
 
 #[async_trait::async_trait]
 impl Scheduler for OneOffPastRetention {
-    const WAIT: Duration = Duration::from_mins(5);
+    const WAIT: Duration = Duration::from_mins(30);
 
     async fn run_once(ctx: &SchedulerContext, reached_end: &mut bool) -> anyhow::Result<()> {
         let mut tx = ctx.pool.begin().await?;
@@ -27,7 +30,7 @@ impl Scheduler for OneOffPastRetention {
                 WHERE sched_2.one_off_job_id = one_off.id
                   AND (
                     sched_2.deleted_at IS NULL OR
-                    sched_2.deleted_At >= now() - interval '3 hours'
+                    sched_2.deleted_At >= now() - interval '1 hours'
                   )
               )
               GROUP BY one_off.id, one_off.tenant_id
@@ -63,18 +66,20 @@ impl Scheduler for OneOffPastRetention {
         .execute(&mut *tx)
         .await?;
 
-        sqlx::query!(
-            r#"
-          UPDATE http_requests
-          SET
-            body = '<deleted>',
-            headers = '{}'
-          WHERE id = $1
-          "#,
-            job.req_id
-        )
-        .execute(&mut *tx)
-        .await?;
+        // sqlx::query!(
+        //     r#"
+        //   UPDATE http_requests
+        //   SET
+        //     body = '<deleted>',
+        //     headers = '{}',
+        //     bytes_used = 0
+        //   WHERE id = $1
+        //   "#,
+        //     job.req_id
+        // )
+        // .execute(&mut *tx)
+        // .await?;
+        delete_http_req(job.req_id, &mut tx).await?;
 
         tx.commit().await?;
 

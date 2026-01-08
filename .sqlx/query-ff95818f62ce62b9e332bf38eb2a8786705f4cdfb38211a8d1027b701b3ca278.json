@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n    SELECT\n      job.id,\n      job.region,\n      job.tenant_id,\n      req.id as req_id,\n      req.method,\n      req.url,\n      req.headers,\n      req.body,\n      job.schedule,\n      job.timeout_ms,\n      job.max_retries,\n      job.max_response_bytes,\n      job.created_at,\n      job.error\n    FROM cron_jobs as job\n    INNER JOIN http_requests as req\n      ON req.id = job.request_id\n    WHERE\n      job.deleted_at IS NULL\n      AND job.id = $1 AND\n      ($2::text IS NULL OR job.tenant_id = $2);\n    ",
+  "query": "\n      SELECT\n        job.id,\n        job.region,\n        job.tenant_id,\n        req.id as req_id,\n        req.method,\n        req.url,\n        req.headers,\n        req.body,\n        job.execute_at,\n        job.timeout_ms,\n        job.max_retries,\n        job.max_response_bytes,\n        job.created_at,\n        job.deleted_at\n      FROM one_off_jobs as job\n      INNER JOIN http_requests as req\n        ON req.id = job.request_id\n      WHERE\n        job.deleted_at IS NULL\n        AND job.id = $1 AND\n        ($2::text IS NULL OR job.tenant_id = $2)\n      FOR UPDATE\n      ",
   "describe": {
     "columns": [
       {
@@ -45,8 +45,8 @@
       },
       {
         "ordinal": 8,
-        "name": "schedule",
-        "type_info": "Text"
+        "name": "execute_at",
+        "type_info": "Int8"
       },
       {
         "ordinal": 9,
@@ -70,8 +70,8 @@
       },
       {
         "ordinal": 13,
-        "name": "error",
-        "type_info": "Text"
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -97,5 +97,5 @@
       true
     ]
   },
-  "hash": "fe9b7165314fdb8e05321f5b894c01ef4738d42c8e331188a5df8e5e1446c7d7"
+  "hash": "ff95818f62ce62b9e332bf38eb2a8786705f4cdfb38211a8d1027b701b3ca278"
 }

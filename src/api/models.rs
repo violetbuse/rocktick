@@ -18,6 +18,7 @@ pub struct CronJob {
     pub max_retries: i32,
     pub max_response_bytes: Option<i32>,
     pub tenant_id: Option<String>,
+    pub deleted_at: Option<i64>,
 }
 
 impl IntoResponse for CronJob {
@@ -37,6 +38,7 @@ pub struct OneOffJob {
     pub max_retries: i32,
     pub max_response_bytes: Option<i32>,
     pub tenant_id: Option<String>,
+    pub deleted_at: Option<i64>,
 }
 
 impl IntoResponse for OneOffJob {

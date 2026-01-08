@@ -1,7 +1,9 @@
 use std::time::Duration;
 
-
-use crate::scheduler::{Scheduler, SchedulerContext};
+use crate::{
+    scheduler::{Scheduler, SchedulerContext},
+    util::scheduled_jobs::delete_scheduled_job,
+};
 
 #[derive(Clone, Copy)]
 pub struct ScheduledPastRetention;
@@ -16,9 +18,7 @@ impl Scheduler for ScheduledPastRetention {
         let scheduled_job = sqlx::query!(
             r#"
         SELECT
-          job.id as id,
-          exec.request_id as req_id,
-          exec.response_id as res_id
+          job.id as id
         FROM scheduled_jobs job
         JOIN job_executions exec
           ON exec.id = job.execution_id
@@ -42,42 +42,7 @@ impl Scheduler for ScheduledPastRetention {
 
         let job = scheduled_job.unwrap();
 
-        sqlx::query!(
-            r#"
-        UPDATE scheduled_jobs
-        SET deleted_at = now()
-        WHERE id = $1
-        "#,
-            job.id
-        )
-        .execute(&mut *tx)
-        .await?;
-
-        sqlx::query!(
-            r#"
-          UPDATE http_requests
-          SET
-            body = '<deleted>',
-            headers = '{}'
-          WHERE id = $1
-          "#,
-            job.req_id
-        )
-        .execute(&mut *tx)
-        .await?;
-
-        sqlx::query!(
-            r#"
-          UPDATE http_responses
-          SET
-            body = '<deleted>',
-            headers = '{}'
-          WHERE id = $1
-          "#,
-            job.res_id
-        )
-        .execute(&mut *tx)
-        .await?;
+        delete_scheduled_job(job.id, &mut tx).await?;
 
         tx.commit().await?;
 

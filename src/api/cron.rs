@@ -29,6 +29,7 @@ struct IntermediateCronJob {
     max_response_bytes: Option<i32>,
     created_at: DateTime<Utc>,
     error: Option<String>,
+    deleted_at: Option<DateTime<Utc>>,
 }
 
 impl IntermediateCronJob {
@@ -65,6 +66,7 @@ impl IntermediateCronJob {
             max_retries: self.max_retries,
             max_response_bytes: self.max_response_bytes,
             tenant_id: self.tenant_id.clone(),
+            deleted_at: self.deleted_at.as_ref().map(DateTime::timestamp),
         }
     }
 }
@@ -258,6 +260,7 @@ async fn create_cron_job(
         max_retries,
         max_response_bytes: create_opts.max_response_bytes,
         tenant_id,
+        deleted_at: None,
     };
 
     Ok(job)
@@ -302,7 +305,8 @@ async fn list_cron_jobs(
         job.max_retries,
         job.max_response_bytes,
         job.created_at,
-        job.error
+        job.error,
+        job.deleted_at
       FROM cron_jobs as job
       INNER JOIN http_requests as req
         ON req.id = job.request_id
@@ -538,7 +542,8 @@ async fn update_cron_job(
         cron_jobs.max_retries,
         cron_jobs.max_response_bytes,
         cron_jobs.created_at,
-        cron_jobs.error
+        cron_jobs.error,
+        cron_jobs.deleted_at
       "#,
         job_id.clone(),
         new_region,
@@ -615,7 +620,8 @@ async fn delete_cron_job(
     job.max_retries,
     job.max_response_bytes,
     job.created_at,
-    job.error
+    job.error,
+    job.deleted_at
   FROM cron_jobs as job
   INNER JOIN http_requests as req
     ON req.id = job.request_id
@@ -665,30 +671,6 @@ async fn delete_cron_job(
     .execute(&mut *txn)
     .await?;
 
-    sqlx::query!(
-        r#"
-      UPDATE scheduled_jobs
-      SET deleted_at = NOW()
-      WHERE cron_job_id = $1
-      "#,
-        job_id.clone()
-    )
-    .execute(&mut *txn)
-    .await?;
-
-    sqlx::query!(
-        r#"
-      UPDATE http_requests
-      SET
-        body = '<deleted>',
-        headers = '{}'
-      WHERE id = $1
-      "#,
-        existing.req_id
-    )
-    .execute(&mut *txn)
-    .await?;
-
     txn.commit().await?;
 
     Ok(pre_delete_job)
@@ -726,13 +708,13 @@ async fn get_cron_job(
       job.max_retries,
       job.max_response_bytes,
       job.created_at,
-      job.error
+      job.error,
+      job.deleted_at
     FROM cron_jobs as job
     INNER JOIN http_requests as req
       ON req.id = job.request_id
     WHERE
-      job.deleted_at IS NULL
-      AND job.id = $1 AND
+      job.id = $1 AND
       ($2::text IS NULL OR job.tenant_id = $2);
     "#,
         job_id.clone(),
