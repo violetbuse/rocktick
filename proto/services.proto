@@ -1,10 +1,11 @@
 syntax = "proto3";
-package broker;
+package services;
 
 service Broker {
   rpc DroneCheckin(DroneCheckinRequest) returns (DroneCheckinResponse);
+  rpc GetDrones(GetDronesRequest) returns (stream GetDronesResponse);
   rpc GetJobs(GetJobsRequest) returns (stream JobSpec);
-  rpc RecordExecution(stream JobExecution) returns (Empty);
+  rpc RecordExecution(stream JobExecution) returns (stream RecordExecutionResponse);
 }
 
 message DroneCheckinRequest {
@@ -16,6 +17,16 @@ message DroneCheckinRequest {
 
 message DroneCheckinResponse {
   int64 checkin_again_at = 1;
+}
+
+message GetDronesRequest {
+  string drone_id = 1;
+}
+
+message GetDronesResponse {
+  string id = 1;
+  string ip = 2;
+  string region = 3;
 }
 
 message GetJobsRequest {
@@ -55,4 +66,10 @@ message Response {
   int64 bytes_used = 4;
 }
 
-message Empty {}
+message RecordExecutionResponse {
+  string job_id = 1;
+}
+
+service Drone {
+  rpc BackupExecution(JobExecution) returns (RecordExecutionResponse);
+}

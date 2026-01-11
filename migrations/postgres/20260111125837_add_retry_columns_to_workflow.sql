@@ -1,0 +1,4 @@
+-- Modify "workflow_executions" table
+ALTER TABLE "workflow_executions" DROP CONSTRAINT "workflow_executions_status_check", ADD CONSTRAINT "workflow_executions_status_check" CHECK (status = ANY (ARRAY['pending'::text, 'waiting'::text, 'scheduled'::text, 'completed'::text, 'failed'::text]));
+-- Modify "workflows" table
+ALTER TABLE "workflows" DROP CONSTRAINT "workflows_check", ADD CONSTRAINT "workflows_check" CHECK ((result IS NULL) OR ((status = 'completed'::text) AND (result IS NOT NULL))), DROP CONSTRAINT "workflows_check1", ADD CONSTRAINT "workflows_check1" CHECK ((error IS NULL) OR ((status = 'failed'::text) AND (error IS NOT NULL))), ADD CONSTRAINT "workflows_check2" CHECK ((retry_count >= 0) AND (retry_count <= max_retries)), ADD CONSTRAINT "workflows_max_retries_check" CHECK (max_retries >= 0), ADD COLUMN "max_retries" integer NOT NULL, ADD COLUMN "retry_count" integer NOT NULL;

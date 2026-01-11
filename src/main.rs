@@ -1,15 +1,16 @@
-use std::{net::IpAddr, sync::OnceLock};
+use std::{net::IpAddr, path::PathBuf, sync::OnceLock};
 
 use anyhow::{Ok, anyhow};
 use clap::{Parser, Subcommand};
 use sqlx::postgres::PgPoolOptions;
 use tokio::select;
 
-use crate::secrets::KeyRing;
+use crate::{drone::store::DroneStore, secrets::KeyRing};
 
 mod api;
 mod broker;
 mod drone;
+mod grpc;
 mod id;
 mod pg;
 mod scheduler;
@@ -131,6 +132,8 @@ pub struct ServerOptions {
     past_retention_schedulers: usize,
     #[arg(long, default_value_t = 2, env = "KEY_ROTATION_SCHEDULER_COUNT")]
     key_rotation_schedulers: usize,
+    #[arg(long, default_value_t = 2, env = "WORKFLOW_SCHEDULER_COUNT")]
+    workflow_schedulers: usize,
 }
 
 #[derive(Debug, Clone, Parser, PartialEq, Eq)]
@@ -197,6 +200,8 @@ pub struct SchedulerOptions {
     past_retention_schedulers: usize,
     #[arg(long, default_value_t = 1, env = "KEY_ROTATION_SCHEDULER_COUNT")]
     key_rotation_schedulers: usize,
+    #[arg(long, default_value_t = 1, env = "WORKFLOW_SCHEDULER_COUNT")]
+    workflow_schedulers: usize,
     #[arg(long, value_parser, env = "KEY_RING")]
     key_ring: KeyRing,
 }
@@ -216,6 +221,7 @@ impl TryFrom<DevOptions> for SchedulerOptions {
             retry_schedulers: 1,
             past_retention_schedulers: 1,
             key_rotation_schedulers: 1,
+            workflow_schedulers: 1,
             key_ring: value.key_ring.unwrap_or(KeyRing::dev()),
         })
     }
@@ -232,6 +238,7 @@ impl From<ServerOptions> for SchedulerOptions {
             retry_schedulers: value.retry_schedulers,
             past_retention_schedulers: value.past_retention_schedulers,
             key_rotation_schedulers: value.key_rotation_schedulers,
+            workflow_schedulers: value.workflow_schedulers,
             key_ring: value.key_ring,
         }
     }
@@ -298,6 +305,10 @@ pub struct DroneOptions {
     id: String,
     #[arg(long, value_parser, env = "DRONE_IP_ADDR")]
     ip: IpAddr,
+    #[arg(long, value_parser, env = "DRONE_STORE_PATH")]
+    store_path: PathBuf,
+    #[arg(long, default_value_t = false)]
+    store_in_memory: bool,
 }
 
 impl TryFrom<DevOptions> for DroneOptions {
@@ -311,6 +322,8 @@ impl TryFrom<DevOptions> for DroneOptions {
             ip: "127.0.0.1"
                 .parse()
                 .expect("127.0.0.1 is not a valid ip apparently???"),
+            store_path: DroneStore::default_store_location()?,
+            store_in_memory: true,
         })
     }
 }

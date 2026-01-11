@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT * FROM drones\n        WHERE\n          id != $1 AND\n          checkin_by > now()\n      ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "ip",
+        "type_info": "Inet"
+      },
+      {
+        "ordinal": 2,
+        "name": "region",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_checkin",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "checkin_by",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b5502ce3a9bf06465d50606ff160d7f7abcb9e48d25b5c90561996a216738c41"
+}

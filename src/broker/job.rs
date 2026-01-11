@@ -7,8 +7,8 @@ use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tonic::Status;
 
 use crate::{
-    broker::{BrokerService, grpc, workflow},
-    id,
+    broker::{BrokerService, workflow},
+    grpc, id,
     secrets::Secret,
     signing::SignatureBuilder,
 };
@@ -19,7 +19,7 @@ pub async fn get_jobs(
     svc: &BrokerService,
     req: tonic::Request<grpc::GetJobsRequest>,
 ) -> Result<tonic::Response<GetJobsStream>, Status> {
-    let (tx, rx) = mpsc::channel(8);
+    let (tx, rx) = mpsc::channel(32);
 
     let data = req.into_inner();
 
@@ -245,10 +245,14 @@ pub async fn get_jobs(
     Ok(tonic::Response::new(ReceiverStream::new(rx)))
 }
 
+pub type RecordExecutionStream = ReceiverStream<Result<grpc::RecordExecutionResponse, Status>>;
+
 pub async fn record_execution(
     svc: &BrokerService,
     req: tonic::Request<tonic::Streaming<grpc::JobExecution>>,
-) -> Result<tonic::Response<grpc::Empty>, Status> {
+) -> Result<tonic::Response<RecordExecutionStream>, Status> {
+    let (tx, rx) = mpsc::channel(16);
+
     let mut executions = req.into_inner();
     let pool = svc.pool.clone();
 
@@ -256,6 +260,7 @@ pub async fn record_execution(
         while let Some(job_execution) = executions.next().await {
             if let Ok(execution) = job_execution {
                 let pool = pool.clone();
+                let response = tx.clone();
                 tokio::spawn(async move {
                     let id = execution.job_id.clone();
                     let success: anyhow::Result<()> = async {
@@ -263,7 +268,7 @@ pub async fn record_execution(
 
                         let scheduled = sqlx::query!(
                             r#"
-                      SELECT id, lock_nonce, tenant_id
+                      SELECT id, lock_nonce, tenant_id, workflow_execution_id
                       FROM scheduled_jobs
                       WHERE id = $1
                         AND lock_nonce = $2
@@ -307,7 +312,7 @@ pub async fn record_execution(
 
                         let mut response_id = None;
 
-                        if let Some(response) = execution.response {
+                        if let Some(response) = execution.response.clone() {
                             let res_id = id::generate("response");
                             response_id = Some(res_id.clone());
 
@@ -344,6 +349,8 @@ pub async fn record_execution(
                             );
                         }
 
+                        let executed_at = executed_at.unwrap_or(Utc::now());
+
                         sqlx::query!(
                             r#"
                           INSERT INTO job_executions
@@ -361,8 +368,24 @@ pub async fn record_execution(
                         .execute(&mut *tx)
                         .await?;
 
-                        workflow::handle_workflow_execution_side_effect(execution.job_id, &mut tx)
+                        if let Some(workflow_execution_id) = scheduled.workflow_execution_id {
+                            let workflow_response_body: Result<String, String> =
+                                if let Some(res) = execution.response.clone() {
+                                    Ok(res.body)
+                                } else if let Some(res_error) = execution.response_error.clone() {
+                                    Err(res_error)
+                                } else {
+                                    Err("Drone did not respond with an response".to_string())
+                                };
+
+                            workflow::handle_workflow_execution_side_effect(
+                                workflow_execution_id,
+                                workflow_response_body,
+                                executed_at,
+                                &mut tx,
+                            )
                             .await?;
+                        }
 
                         sqlx::query!(
                             r#"
@@ -388,13 +411,23 @@ pub async fn record_execution(
                         eprintln!(
                             "Error committing execution to the database for job id {id}: {error:?}"
                         );
+                    } else {
+                        let execution_response = grpc::RecordExecutionResponse {
+                            job_id: execution.job_id,
+                        };
+
+                        if response.send(Ok(execution_response)).await.is_err() {
+                            eprintln!(
+                                "Error sending execution response for job id {id} to client."
+                            );
+                        }
                     }
                 });
             }
         }
     });
 
-    Ok(tonic::Response::new(grpc::Empty {}))
+    Ok(tonic::Response::new(ReceiverStream::new(rx)))
 }
 
 pub async fn run_job_cleanup_loop(pool: Pool<Postgres>) -> anyhow::Result<()> {

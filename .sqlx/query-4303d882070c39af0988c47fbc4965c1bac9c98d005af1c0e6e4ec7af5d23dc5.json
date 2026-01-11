@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                      SELECT id, lock_nonce, tenant_id\n                      FROM scheduled_jobs\n                      WHERE id = $1\n                        AND lock_nonce = $2\n                      FOR UPDATE;\n                      ",
+  "query": "\n                      SELECT id, lock_nonce, tenant_id, workflow_execution_id\n                      FROM scheduled_jobs\n                      WHERE id = $1\n                        AND lock_nonce = $2\n                      FOR UPDATE;\n                      ",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,11 @@
         "ordinal": 2,
         "name": "tenant_id",
         "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "workflow_execution_id",
+        "type_info": "Varchar"
       }
     ],
     "parameters": {
@@ -28,8 +33,9 @@
     "nullable": [
       false,
       true,
+      true,
       true
     ]
   },
-  "hash": "9985b4c21d1190f893737d8f68cdf0ea2f8494fb97a0cfa4e210b4ffd58c3f09"
+  "hash": "4303d882070c39af0988c47fbc4965c1bac9c98d005af1c0e6e4ec7af5d23dc5"
 }

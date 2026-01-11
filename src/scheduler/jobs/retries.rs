@@ -3,7 +3,6 @@ use std::{
     time::Duration,
 };
 
-
 use crate::{
     id,
     scheduler::{Scheduler, SchedulerContext},
@@ -37,6 +36,7 @@ impl Scheduler for RetryScheduler {
       ON job.id = pending_retry.retry_for_id
     WHERE
       job.deleted_at IS NULL AND
+      job.workflow_id IS NULL AND
       exec.success = false AND
       job.max_retries > 0 AND
       pending_retry.id IS NULL

@@ -82,6 +82,16 @@
         "ordinal": 15,
         "name": "times_locked",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 16,
+        "name": "workflow_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 17,
+        "name": "workflow_execution_id",
+        "type_info": "Varchar"
       }
     ],
     "parameters": {
@@ -105,7 +115,9 @@
       true,
       true,
       true,
-      false
+      false,
+      true,
+      true
     ]
   },
   "hash": "048ca4d28329a0597b66f634c8c11cf8f6b8eb490925d76f6ef33f929007e401"

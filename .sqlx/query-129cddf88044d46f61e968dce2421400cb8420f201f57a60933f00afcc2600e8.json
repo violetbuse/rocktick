@@ -1,0 +1,80 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          SELECT workflow.*\n          FROM workflows workflow\n          WHERE\n            EXISTS (\n              SELECT 1\n              FROM workflow_executions exec\n              WHERE exec.workflow_id = workflow.id\n                AND exec.status = 'waiting'\n            )\n            AND NOT EXISTS (\n              SELECT 1\n              FROM workflow_executions exec\n              WHERE exec.workflow_id = workflow.id\n                AND exec.status NOT IN ('waiting', 'completed', 'failed')\n            )\n            AND NOT EXISTS (\n              SELECT 1\n              FROM workflow_executions exec\n              JOIN workflow_dependencies dep\n                ON dep.workflow_execution_id = exec.id\n              LEFT JOIN workflows child_workflow\n                ON child_workflow.id = dep.child_workflow_id\n              WHERE exec.workflow_id = workflow.id\n                AND (\n                  -- Blocking Condition A: a wait timer that hasn't elapsed yet\n                  (dep.wait_until IS NOT NULL AND dep.wait_until > now()) OR\n                  -- Blocking Condition B: a child workflow that isn't completed or failed\n                  (dep.child_workflow_id IS NOT NULL AND child_workflow.status = 'pending')\n                )\n            )\n          LIMIT 1 FOR UPDATE SKIP LOCKED;\n          ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "region",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "tenant_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "implementation_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "input",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "context",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "result",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 8,
+        "name": "error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "max_retries",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "retry_count",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "129cddf88044d46f61e968dce2421400cb8420f201f57a60933f00afcc2600e8"
+}

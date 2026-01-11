@@ -5,10 +5,10 @@ use chrono::{TimeDelta, Utc};
 use crate::scheduler::{Scheduler, SchedulerContext};
 
 #[derive(Clone, Copy)]
-pub struct TenantScheduler;
+pub struct TenantTokenScheduler;
 
 #[async_trait::async_trait]
-impl Scheduler for TenantScheduler {
+impl Scheduler for TenantTokenScheduler {
     async fn run_once(ctx: &SchedulerContext, reached_end: &mut bool) -> anyhow::Result<()> {
         let mut tx = ctx.pool.begin().await?;
 

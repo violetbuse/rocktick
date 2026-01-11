@@ -1,29 +1,16 @@
-mod cron;
-mod key_rotate;
-mod one_off;
+mod jobs;
 mod retention;
-mod retries;
 mod tenants;
+mod util;
+mod workflow;
 
 use std::time::Duration;
 
-use futures::stream::FuturesUnordered;
+use futures::future::try_join_all;
 use sqlx::{Pool, Postgres};
-use tokio::select;
-use tokio_stream::StreamExt;
+use tokio::task::JoinHandle;
 
-use crate::{
-    SchedulerOptions,
-    scheduler::{
-        cron::CronScheduler,
-        key_rotate::KeyRotationScheduler,
-        one_off::OneOffScheduler,
-        retention::{one_off::OneOffPastRetention, scheduled::ScheduledPastRetention},
-        retries::RetryScheduler,
-        tenants::TenantScheduler,
-    },
-    secrets::KeyRing,
-};
+use crate::{SchedulerOptions, secrets::KeyRing};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -34,6 +21,7 @@ pub struct Config {
     retry_count: usize,
     past_retention_count: usize,
     key_rotation_count: usize,
+    workflow_count: usize,
     key_ring: KeyRing,
 }
 
@@ -47,6 +35,7 @@ impl Config {
             retry_count: options.retry_schedulers,
             past_retention_count: options.past_retention_schedulers,
             key_rotation_count: options.key_rotation_schedulers,
+            workflow_count: options.workflow_schedulers,
             key_ring: options.key_ring,
         }
     }
@@ -80,7 +69,7 @@ async fn scheduling_loop<S: Scheduler>(ctx: &SchedulerContext) -> anyhow::Result
 async fn run_multiple<S: Scheduler>(ctx: &SchedulerContext, count: usize) -> anyhow::Result<()> {
     tokio::time::sleep(S::WAIT).await;
 
-    let mut tasks = FuturesUnordered::new();
+    let mut tasks = Vec::new();
 
     for _ in 0..count {
         let ctx = ctx.clone();
@@ -89,41 +78,33 @@ async fn run_multiple<S: Scheduler>(ctx: &SchedulerContext, count: usize) -> any
         ));
     }
 
-    if let Some(join_result) = tasks.next().await {
-        let inner = join_result?;
-
-        inner?;
-    }
+    try_join_all(tasks).await?;
 
     Ok(())
 }
 
+pub fn spawn_scheduler<S: Scheduler>(
+    ctx: &SchedulerContext,
+    count: usize,
+) -> JoinHandle<anyhow::Result<()>> {
+    let ctx = ctx.clone();
+    tokio::spawn(async move { run_multiple::<S>(&ctx, count).await })
+}
+
 pub async fn start(config: Config) -> anyhow::Result<()> {
-    let context = SchedulerContext {
+    let ctx = SchedulerContext {
         pool: config.pool.clone(),
         key_ring: config.key_ring.clone(),
     };
 
-    let one_off_jobs_sched = run_multiple::<OneOffScheduler>(&context, config.one_off_count);
-    let cron_jobs_sched = run_multiple::<CronScheduler>(&context, config.cron_count);
-    let retry_jobs_sched = run_multiple::<RetryScheduler>(&context, config.retry_count);
-    let tenant_jobs_sched = run_multiple::<TenantScheduler>(&context, config.tenant_count);
-    let past_retention_jobs_sched =
-        run_multiple::<ScheduledPastRetention>(&context, config.past_retention_count);
-    let past_retention_jobs_one_off =
-        run_multiple::<OneOffPastRetention>(&context, config.past_retention_count);
-    let key_rotation_jobs_sched =
-        run_multiple::<KeyRotationScheduler>(&context, config.key_rotation_count);
+    let mut all_tasks = Vec::new();
+    all_tasks.extend(jobs::get_job_schedulers(&ctx, &config));
+    all_tasks.extend(retention::get_retention_schedulers(&ctx, &config));
+    all_tasks.extend(tenants::get_tenant_schedulers(&ctx, &config));
+    all_tasks.extend(util::get_util_schedulers(&ctx, &config));
+    all_tasks.extend(workflow::get_workflow_schedulers(&ctx, &config));
 
-    select! {
-      res = one_off_jobs_sched => res?,
-      res = cron_jobs_sched => res?,
-      res = retry_jobs_sched => res?,
-      res = tenant_jobs_sched => res?,
-      res = past_retention_jobs_sched => res?,
-      res = past_retention_jobs_one_off => res?,
-      res = key_rotation_jobs_sched => res?,
-    }
+    try_join_all(all_tasks).await?;
 
     Ok(())
 }

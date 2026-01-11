@@ -1,6 +1,11 @@
+use std::str::FromStr;
+
 use indoc::indoc;
 use postgresql_embedded::{PostgreSQL, Settings, VersionReq};
-use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
+use sqlx::{
+    ConnectOptions, Pool, Postgres,
+    postgres::{PgConnectOptions, PgPoolOptions},
+};
 
 include!(concat!(env!("OUT_DIR"), "/embedded_postgres_version.rs"));
 
@@ -22,7 +27,7 @@ pub async fn create_pool(postgres_url: String, count: u32) -> anyhow::Result<Poo
 }
 
 pub async fn migrate_pg(pool: &Pool<Postgres>) -> anyhow::Result<()> {
-    sqlx::migrate!("./migrations").run(pool).await?;
+    sqlx::migrate!("./migrations/postgres").run(pool).await?;
 
     Ok(())
 }

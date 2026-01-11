@@ -8,8 +8,8 @@ use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tonic::Request;
 
 use crate::{
-    broker::grpc::{self, broker_client::BrokerClient},
     drone::{DroneState, util::resolve_public_ip},
+    grpc::{self, broker_client::BrokerClient},
 };
 
 async fn send_request_to_ip(
@@ -215,7 +215,7 @@ async fn submit_job_results(state: DroneState) -> anyhow::Result<()> {
         state.exec_results.lock().await.drain(..).collect();
 
     if !execution_results.is_empty() {
-        let (tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::channel(8);
 
         let iter_state = state.clone();
         tokio::spawn(async move {

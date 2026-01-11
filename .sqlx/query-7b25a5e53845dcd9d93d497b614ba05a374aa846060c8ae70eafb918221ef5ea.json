@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    UPDATE workflows\n    SET\n      status = 'completed',\n      result = $2,\n      context = $3\n    WHERE id = $1\n  ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Jsonb",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b25a5e53845dcd9d93d497b614ba05a374aa846060c8ae70eafb918221ef5ea"
+}

@@ -3,9 +3,11 @@ use std::net::IpAddr;
 use chrono::DateTime;
 use replace_err::ReplaceErr;
 use sqlx::types::ipnetwork::IpNetwork;
+use tokio::sync::mpsc;
+use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tonic::Status;
 
-use crate::broker::{BrokerService, grpc};
+use crate::{broker::BrokerService, grpc};
 
 pub async fn handle_checkin(
     svc: &BrokerService,
@@ -48,4 +50,48 @@ pub async fn handle_checkin(
     Ok(tonic::Response::new(grpc::DroneCheckinResponse {
         checkin_again_at: report_back_in.timestamp_millis(),
     }))
+}
+
+pub type GetDronesStream = ReceiverStream<Result<grpc::GetDronesResponse, Status>>;
+
+pub async fn handle_get_drones(
+    svc: &BrokerService,
+    req: tonic::Request<grpc::GetDronesRequest>,
+) -> Result<tonic::Response<GetDronesStream>, Status> {
+    let (tx, rx) = mpsc::channel(32);
+
+    let data = req.into_inner();
+
+    let pool = svc.pool.clone();
+
+    tokio::spawn(async move {
+        let mut stream = sqlx::query!(
+            r#"
+        SELECT * FROM drones
+        WHERE
+          id != $1 AND
+          checkin_by > now()
+      "#,
+            data.drone_id
+        )
+        .fetch(&pool);
+
+        while let Some(next) = stream.next().await {
+            if let Ok(drone) = next {
+                let response = grpc::GetDronesResponse {
+                    id: drone.id,
+                    ip: drone.ip.to_string(),
+                    region: drone.region,
+                };
+
+                if tx.send(Ok(response)).await.is_err() {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+    });
+
+    Ok(tonic::Response::new(ReceiverStream::new(rx)))
 }

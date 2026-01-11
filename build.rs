@@ -7,9 +7,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = env::var("OUT_DIR")?;
 
     println!("cargo:rerun-if-changed=Cargo.toml");
-    println!("cargo:rerun-if-changed=proto");
-    tonic_prost_build::compile_protos("proto/broker.proto")?;
-    tonic_prost_build::compile_protos("proto/drone.proto")?;
+    println!("cargo:rerun-if-changed=proto/services.proto");
+    tonic_prost_build::compile_protos("proto/services.proto")?;
 
     println!("cargo:rerun-if-changed=migrations");
 
