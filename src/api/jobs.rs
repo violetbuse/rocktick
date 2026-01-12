@@ -9,7 +9,7 @@ use crate::{
         ApiError, ApiListResponse, Context, JsonBody, TenantId, executions,
         models::{Execution, HttpRequest, OneOffJob},
     },
-    id,
+    id, util,
 };
 
 struct IntermediateOneOffJob {
@@ -748,6 +748,8 @@ async fn delete_job(
     )
     .execute(&mut *txn)
     .await?;
+
+    util::http_requests::delete_http_req(existing.req_id, &mut txn).await?;
 
     txn.commit().await?;
 

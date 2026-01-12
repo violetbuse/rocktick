@@ -8,9 +8,9 @@ pub async fn delete_http_req(
         r#"
     UPDATE http_requests
     SET
-      body = '<del>',
+      body = '',
       headers = '{}',
-      bytes_used = 0
+      deleted_at = now()
     WHERE id = $1
     "#,
         id

@@ -135,7 +135,7 @@ pub async fn get_jobs(
                 let max_response_bytes = job
                     .max_response_bytes
                     .or(job.max_max_response_bytes)
-                    .unwrap_or(33554432);
+                    .map(|bytes| bytes as i64);
 
                 let tenant_signing_secret: Option<Secret> = if let Some(id) = job.secret_id
                     && let Some(master_key_id) = job.master_key_id
@@ -232,7 +232,7 @@ pub async fn get_jobs(
                     headers: req_headers,
                     body: job.body,
                     timeout_ms: timeout,
-                    max_response_bytes: Some(max_response_bytes as i64),
+                    max_response_bytes,
                 };
 
                 if tx.send(Ok(job_spec)).await.is_err() {
@@ -298,16 +298,15 @@ pub async fn record_execution(
                         sqlx::query!(
                             r#"
                         INSERT INTO http_requests
-                          (id, method, url, headers, body, bytes_used)
+                          (id, method, url, headers, body)
                         VALUES
-                          ($1, $2, $3 ,$4, $5, $6)
+                          ($1, $2, $3 ,$4, $5)
                         "#,
                             request_id,
                             execution.req_method,
                             execution.req_url,
                             &req_headers,
-                            execution.req_body,
-                            execution.req_body_bytes_used as i32
+                            execution.req_body
                         )
                         .execute(&mut *tx)
                         .await?;
@@ -327,15 +326,14 @@ pub async fn record_execution(
                             sqlx::query!(
                                 r#"
                               INSERT INTO http_responses
-                                (id, status, headers, body, bytes_used)
+                                (id, status, headers, body)
                               VALUES
-                                ($1, $2, $3, $4, $5);
+                                ($1, $2, $3, $4);
                               "#,
                                 res_id,
                                 response.status as i64,
                                 &headers,
                                 response.body,
-                                response.bytes_used as i32
                             )
                             .execute(&mut *tx)
                             .await?;

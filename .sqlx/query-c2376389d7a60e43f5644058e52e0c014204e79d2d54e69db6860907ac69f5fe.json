@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    UPDATE http_responses\n    SET\n      body = '',\n      headers = '{}',\n      deleted_at = now()\n    WHERE id = $1\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c2376389d7a60e43f5644058e52e0c014204e79d2d54e69db6860907ac69f5fe"
+}

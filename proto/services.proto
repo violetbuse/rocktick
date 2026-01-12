@@ -57,7 +57,6 @@ message JobExecution {
   string req_url = 7;
   map<string, string> req_headers = 8;
   optional string req_body = 9;
-  int64 req_body_bytes_used = 11;
   int64 executed_at = 10;
 }
 
@@ -65,7 +64,6 @@ message Response {
   int64 status = 1;
   map<string, string> headers = 2;
   string body = 3;
-  int64 bytes_used = 4;
 }
 
 message RecordExecutionResponse {

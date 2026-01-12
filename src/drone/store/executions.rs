@@ -19,8 +19,7 @@ impl DroneStore {
               exec.*,
               res.status as res_status,
               res.header_map as res_header_map,
-              res.body as res_body,
-              res.bytes_used as res_bytes_used
+              res.body as res_body
             FROM executions exec
             LEFT JOIN execution_responses res
               ON exec.response_id = res.id
@@ -54,16 +53,15 @@ impl DroneStore {
             sqlx::query(
                 r#"
                 INSERT INTO execution_responses
-                  (id, status, header_map, body, bytes_used)
+                  (id, status, header_map, body)
                 VALUES
-                  ($1, $2, $3, $4, $5);
+                  ($1, $2, $3, $4);
             "#,
             )
             .bind(id)
             .bind(res.status)
             .bind(res_headers)
             .bind(res.body)
-            .bind(res.bytes_used)
             .execute(&mut *tx)
             .await?;
         }
@@ -82,14 +80,13 @@ impl DroneStore {
             req_url,
             req_header_map,
             req_body,
-            req_body_bytes_used,
             executed_at,
             is_local,
             replicated_times,
             sync_status,
             sync_time,
             sync_nonce)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);
         "#,
         )
         .bind(exec.job_id)
@@ -101,7 +98,6 @@ impl DroneStore {
         .bind(exec.req_url)
         .bind(req_headers)
         .bind(exec.req_body)
-        .bind(exec.req_body_bytes_used)
         .bind(exec.executed_at)
         .bind(local)
         .bind(0)
@@ -225,8 +221,7 @@ impl DroneStore {
                   exec.*,
                   res.status as res_status,
                   res.header_map as res_header_map,
-                  res.body as res_body,
-                  res.bytes_used as res_bytes_used
+                  res.body as res_body
                 FROM executions exec
                 LEFT JOIN execution_responses res
                   ON exec.response_id = res.id
@@ -278,7 +273,6 @@ struct IntermediateExecution {
     req_url: String,
     req_header_map: String,
     req_body: Option<String>,
-    req_body_bytes_used: i64,
     executed_at: i64,
     is_local: bool,
     replicated_times: i64,
@@ -288,7 +282,6 @@ struct IntermediateExecution {
     res_status: Option<i64>,
     res_header_map: Option<String>,
     res_body: Option<String>,
-    res_bytes_used: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -329,7 +322,6 @@ fn intermediate_to_execution(
     let response = if let Some(status) = exec.res_status
         && let Some(res_header_map) = exec.res_header_map
         && let Some(body) = exec.res_body
-        && let Some(bytes_used) = exec.res_bytes_used
     {
         let headers: HashMap<String, String> = serde_json::from_str(&res_header_map)
             .context("Failed to deserialize response headers")?;
@@ -337,7 +329,6 @@ fn intermediate_to_execution(
             status,
             headers,
             body,
-            bytes_used,
         })
     } else {
         None
@@ -371,7 +362,6 @@ fn intermediate_to_execution(
             req_url: exec.req_url,
             req_headers,
             req_body: exec.req_body,
-            req_body_bytes_used: exec.req_body_bytes_used,
             executed_at: exec.executed_at,
         },
         ExecutionMetadata {
@@ -408,14 +398,12 @@ mod tests {
                 status: 200,
                 headers: res_headers,
                 body: "{\"status\": \"ok\"}".to_string(),
-                bytes_used: 15,
             }),
             response_error: None,
             req_method: "POST".to_string(),
             req_url: "https://api.example.com/job".to_string(),
             req_headers,
             req_body: Some("{\"data\": 1}".to_string()),
-            req_body_bytes_used: 10,
             executed_at: 1234567890,
         };
 
@@ -460,7 +448,6 @@ mod tests {
             req_url: "http://test.com".to_string(),
             req_headers: HashMap::new(),
             req_body: None,
-            req_body_bytes_used: 0,
             executed_at: 987654321,
         };
 
@@ -503,21 +490,19 @@ mod tests {
                 status: 201,
                 headers: res_headers.clone(),
                 body: response_body.clone(),
-                bytes_used: 50,
             }),
             response_error: None,
             req_method: "PUT".to_string(),
             req_url: "http://test.local".to_string(),
             req_headers: req_headers.clone(),
             req_body: Some(req_body.clone()),
-            req_body_bytes_used: 20,
             executed_at: 1111111111,
         };
 
         store.insert_execution(execution.clone(), true).await?;
 
         // Verify directly via SQL
-        // Tuple: (job_id, success, lock_nonce, response_id, response_error, req_method, req_url, req_header_map, req_body, req_body_bytes_used, executed_at, is_local, replicated_times, sync_status, sync_time, sync_nonce)
+        // Tuple: (job_id, success, lock_nonce, response_id, response_error, req_method, req_url, req_header_map, req_body, executed_at, is_local, replicated_times, sync_status, sync_time, sync_nonce)
         let row: (
             String,
             bool,
@@ -529,7 +514,6 @@ mod tests {
             String,
             Option<String>,
             i64,
-            i64,
             bool,
             i64,
             String,
@@ -539,8 +523,8 @@ mod tests {
             r#"
             SELECT
                 job_id, success, lock_nonce, response_id, response_error,
-                req_method, req_url, req_header_map, req_body, req_body_bytes_used,
-                executed_at, is_local, replicated_times, sync_status, sync_time, sync_nonce
+                req_method, req_url, req_header_map, req_body, executed_at, is_local,
+                replicated_times, sync_status, sync_time, sync_nonce
             FROM executions
             WHERE job_id = ?
             "#,
@@ -560,18 +544,17 @@ mod tests {
         let stored_req_headers: HashMap<String, String> = serde_json::from_str(&row.7)?;
         assert_eq!(stored_req_headers, req_headers);
         assert_eq!(row.8, Some(req_body)); // req_body
-        assert_eq!(row.9, 20); // req_body_bytes_used
-        assert_eq!(row.10, 1111111111); // executed_at
-        assert!(row.11); // is_local
-        assert_eq!(row.12, 0); // replicated_times
-        assert_eq!(row.13, "local"); // sync_status
-        assert_eq!(row.14, None); // sync_time
-        assert_eq!(row.15, None); // sync_nonce
+        assert_eq!(row.9, 1111111111); // executed_at
+        assert!(row.10); // is_local
+        assert_eq!(row.11, 0); // replicated_times
+        assert_eq!(row.12, "local"); // sync_status
+        assert_eq!(row.13, None); // sync_time
+        assert_eq!(row.14, None); // sync_nonce
 
         // Verify response table
         let response_id = row.3.unwrap();
-        let res_row: (String, i64, String, String, i64) = sqlx::query_as(
-            "SELECT id, status, header_map, body, bytes_used FROM execution_responses WHERE id = ?",
+        let res_row: (String, i64, String, String) = sqlx::query_as(
+            "SELECT id, status, header_map, body FROM execution_responses WHERE id = ?",
         )
         .bind(response_id)
         .fetch_one(&store.pool)
@@ -581,7 +564,6 @@ mod tests {
         let stored_res_headers: HashMap<String, String> = serde_json::from_str(&res_row.2)?;
         assert_eq!(stored_res_headers, res_headers);
         assert_eq!(res_row.3, response_body);
-        assert_eq!(res_row.4, 50);
 
         Ok(())
     }
@@ -601,8 +583,8 @@ mod tests {
         // Manually insert response
         sqlx::query(
             r#"
-            INSERT INTO execution_responses (id, status, header_map, body, bytes_used)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO execution_responses (id, status, header_map, body)
+            VALUES (?, ?, ?, ?)
             "#,
         )
         .bind(&response_id)
@@ -618,9 +600,9 @@ mod tests {
             r#"
             INSERT INTO executions
               (job_id, success, lock_nonce, response_id, response_error,
-               req_method, req_url, req_header_map, req_body, req_body_bytes_used,
-               executed_at, is_local, replicated_times, sync_status, sync_time, sync_nonce)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               req_method, req_url, req_header_map, req_body, executed_at,
+               is_local, replicated_times, sync_status, sync_time, sync_nonce)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&job_id)
@@ -632,7 +614,6 @@ mod tests {
         .bind("http://delete.me")
         .bind(&req_headers_json)
         .bind(Some("del_body"))
-        .bind(5)
         .bind(2222222222i64)
         .bind(false) // is_local
         .bind(3) // replicated_times
@@ -646,22 +627,20 @@ mod tests {
         let (execution, metadata) = store.get_execution(job_id.clone()).await?;
 
         assert_eq!(execution.job_id, job_id);
-        assert!(execution.success);
+        assert!(!execution.success);
         assert_eq!(execution.lock_nonce, 55);
         assert_eq!(execution.req_method, "DELETE");
         assert_eq!(execution.req_url, "http://delete.me");
         assert_eq!(execution.req_headers, req_headers_map);
         assert_eq!(execution.req_body, Some("del_body".to_string()));
-        assert_eq!(execution.req_body_bytes_used, 5);
         assert_eq!(execution.executed_at, 2222222222);
 
         let resp = execution.response.expect("Response should be present");
         assert_eq!(resp.status, 404);
         assert_eq!(resp.headers, res_headers_map);
         assert_eq!(resp.body, "Not Found");
-        assert_eq!(resp.bytes_used, 100);
 
-        assert!(metadata.is_local);
+        assert!(!metadata.is_local);
         assert_eq!(metadata.replicated_times, 3);
         assert!(matches!(metadata.sync_status, SyncStatus::Pending));
         assert_eq!(metadata.sync_time.timestamp(), 3333333333);
@@ -680,9 +659,9 @@ mod tests {
             r#"
                 INSERT INTO executions (
                     job_id, success, lock_nonce, response_id, response_error,
-                    req_method, req_url, req_header_map, req_body, req_body_bytes_used,
+                    req_method, req_url, req_header_map, req_body,
                     executed_at, is_local, replicated_times, sync_status, sync_time, sync_nonce
-                ) VALUES (?, 1, 1, NULL, 'err', 'GET', 'http://u', '{}', NULL, 0, 100, 1, 0, ?, ?, ?)
+                ) VALUES (?, 1, 1, NULL, 'err', 'GET', 'http://u', '{}', NULL, 100, 1, 0, ?, ?, ?)
                 "#,
         )
         .bind(job_id)
@@ -745,8 +724,8 @@ mod tests {
         let old_time = (Utc::now() - Duration::hours(2)).timestamp();
         sqlx::query(
              r#"INSERT INTO executions (
-                    job_id, success, lock_nonce, response_id, response_error, req_method, req_url, req_header_map, req_body_bytes_used, executed_at, is_local, replicated_times, sync_status, sync_time, sync_nonce
-                ) VALUES (?, 1, 1, NULL, 'err', 'GET', 'http://u', '{}', 0, 100, 1, 0, 'pending', ?, 123)"#
+                    job_id, success, lock_nonce, response_id, response_error, req_method, req_url, req_header_map, executed_at, is_local, replicated_times, sync_status, sync_time, sync_nonce
+                ) VALUES (?, 1, 1, NULL, 'err', 'GET', 'http://u', '{}', 100, 1, 0, 'pending', ?, 123)"#
         )
         .bind(job_stuck)
         .bind(old_time)
@@ -757,8 +736,8 @@ mod tests {
         let recent_time = Utc::now().timestamp();
         sqlx::query(
              r#"INSERT INTO executions (
-                    job_id, success, lock_nonce, response_id, response_error, req_method, req_url, req_header_map, req_body_bytes_used, executed_at, is_local, replicated_times, sync_status, sync_time, sync_nonce
-                ) VALUES (?, 1, 1, NULL, 'err', 'GET', 'http://u', '{}', 0, 100, 1, 0, 'pending', ?, 124)"#
+                    job_id, success, lock_nonce, response_id, response_error, req_method, req_url, req_header_map, executed_at, is_local, replicated_times, sync_status, sync_time, sync_nonce
+                ) VALUES (?, 1, 1, NULL, 'err', 'GET', 'http://u', '{}', 100, 1, 0, 'pending', ?, 124)"#
         )
         .bind(job_recent)
         .bind(recent_time)
@@ -768,8 +747,8 @@ mod tests {
         let job_synced = "job_synced";
         sqlx::query(
              r#"INSERT INTO executions (
-                    job_id, success, lock_nonce, response_id, response_error, req_method, req_url, req_header_map, req_body_bytes_used, executed_at, is_local, replicated_times, sync_status, sync_time, sync_nonce
-                ) VALUES (?, 1, 1, NULL, 'err', 'GET', 'http://u', '{}', 0, 100, 1, 0, 'synced', ?, 125)"#
+                    job_id, success, lock_nonce, response_id, response_error, req_method, req_url, req_header_map, executed_at, is_local, replicated_times, sync_status, sync_time, sync_nonce
+                ) VALUES (?, 1, 1, NULL, 'err', 'GET', 'http://u', '{}', 100, 1, 0, 'synced', ?, 125)"#
         )
         .bind(job_synced)
         .bind(recent_time)
@@ -777,13 +756,13 @@ mod tests {
 
         // 4. Orphaned response -> should be deleted
         let orphan_resp_id = "orphan_resp";
-        sqlx::query("INSERT INTO execution_responses (id, status, header_map, body, bytes_used) VALUES (?, 200, '{}', 'b', 0)")
+        sqlx::query("INSERT INTO execution_responses (id, status, header_map, body) VALUES (?, 200, '{}', 'b')")
             .bind(orphan_resp_id)
             .execute(&store.pool).await?;
 
         // 5. Response linked to kept job (job_recent) -> should be kept
         let kept_resp_id = "kept_resp";
-        sqlx::query("INSERT INTO execution_responses (id, status, header_map, body, bytes_used) VALUES (?, 200, '{}', 'b', 0)")
+        sqlx::query("INSERT INTO execution_responses (id, status, header_map, body) VALUES (?, 200, '{}', 'b')")
             .bind(kept_resp_id)
             .execute(&store.pool).await?;
 
@@ -840,9 +819,9 @@ mod tests {
             r#"
                 INSERT INTO executions (
                     job_id, success, lock_nonce, response_id, response_error,
-                    req_method, req_url, req_header_map, req_body, req_body_bytes_used,
+                    req_method, req_url, req_header_map, req_body,
                     executed_at, is_local, replicated_times, sync_status
-                ) VALUES (?, 1, 1, NULL, 'err', 'GET', 'http://u', '{}', NULL, 0, ?, 1, 0, ?)
+                ) VALUES (?, 1, 1, NULL, 'err', 'GET', 'http://u', '{}', NULL, ?, 1, 0, ?)
                 "#,
         )
         .bind(id)
@@ -895,9 +874,9 @@ mod tests {
              r#"
                 INSERT INTO executions (
                     job_id, success, lock_nonce, response_id, response_error,
-                    req_method, req_url, req_header_map, req_body, req_body_bytes_used,
+                    req_method, req_url, req_header_map, req_body,
                     executed_at, is_local, replicated_times, sync_status, sync_time, sync_nonce
-                ) VALUES (?, 1, 1, NULL, 'err', 'GET', 'http://u', '{}', NULL, 0, 100, 1, 0, 'pending', 123456, 789)
+                ) VALUES (?, 1, 1, NULL, 'err', 'GET', 'http://u', '{}', NULL, 100, 1, 0, 'pending', 123456, 789)
                 "#
         )
         .bind(job_id)
@@ -930,7 +909,6 @@ mod tests {
             req_url: "http://example.com".to_string(),
             req_headers: HashMap::new(),
             req_body: None,
-            req_body_bytes_used: 0,
             executed_at: 100,
         };
 
@@ -1020,15 +998,15 @@ mod tests {
         res_headers.insert("h".to_string(), "v".to_string());
         let res_headers_json = serde_json::to_string(&res_headers)?;
 
-        sqlx::query("INSERT INTO execution_responses (id, status, header_map, body, bytes_used) VALUES (?, 200, ?, 'b', 0)")
+        sqlx::query("INSERT INTO execution_responses (id, status, header_map, body) VALUES (?, 200, ?, 'b')")
             .bind(res_id)
             .bind(&res_headers_json)
             .execute(&store.pool).await?;
 
         sqlx::query(
              r#"INSERT INTO executions (
-                    job_id, success, lock_nonce, response_id, response_error, req_method, req_url, req_header_map, req_body_bytes_used, executed_at, is_local, replicated_times, sync_status
-                ) VALUES (?, 1, 1, ?, NULL, 'GET', 'http://u', '{}', 0, 100, 1, 0, 'local')"#
+                    job_id, success, lock_nonce, response_id, response_error, req_method, req_url, req_header_map, executed_at, is_local, replicated_times, sync_status
+                ) VALUES (?, 1, 1, ?, NULL, 'GET', 'http://u', '{}', 100, 1, 0, 'local')"#
         )
         .bind(job_id)
         .bind(res_id)
@@ -1036,7 +1014,7 @@ mod tests {
 
         // 2. Insert zombie response (no execution links to it)
         let zombie_res_id = "res_zombie";
-        sqlx::query("INSERT INTO execution_responses (id, status, header_map, body, bytes_used) VALUES (?, 200, ?, 'b', 0)")
+        sqlx::query("INSERT INTO execution_responses (id, status, header_map, body) VALUES (?, 200, ?, 'b')")
             .bind(zombie_res_id)
             .bind(&res_headers_json)
             .execute(&store.pool).await?;

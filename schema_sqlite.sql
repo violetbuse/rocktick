@@ -12,7 +12,6 @@ CREATE TABLE executions (
     json_type(req_header_map) = 'object'
   ),
   req_body TEXT,
-  req_body_bytes_used INTEGER NOT NULL,
   executed_at INTEGER NOT NULL,
   is_local INTEGER NOT NULL CHECK (is_local IN (0, 1)),
   replicated_times INTEGER NOT NULL,
@@ -34,6 +33,5 @@ CREATE TABLE execution_responses (
     json_valid(header_map) AND
     json_type(header_map) = 'object'
   ),
-  body TEXT NOT NULL,
-  bytes_used INTEGER NOT NULL
+  body TEXT NOT NULL
 ) STRICT;

@@ -49,7 +49,10 @@ CREATE TABLE http_requests (
   url TEXT NOT NULL,
   headers TEXT[] NOT NULL,
   body TEXT,
-  bytes_used INTEGER NOT NULL
+  bytes_used INTEGER NOT NULL GENERATED ALWAYS AS (
+    COALESCE(octet_length(body), 0)
+  ) STORED,
+  deleted_at TIMESTAMPTZ
 );
 
 CREATE TABLE http_responses (
@@ -57,7 +60,10 @@ CREATE TABLE http_responses (
   status INTEGER NOT NULL,
   headers TEXT[] NOT NULL,
   body TEXT NOT NULL,
-  bytes_used INTEGER NOT NULL
+  bytes_used INTEGER NOT NULL GENERATED ALWAYS AS (
+    COALESCE(octet_length(body), 0)
+  ) STORED,
+  deleted_at TIMESTAMPTZ
 );
 
 CREATE TABLE one_off_jobs (
@@ -119,6 +125,10 @@ CREATE TABLE workflow_executions (
       (failure_reason IS NOT NULL AND status = 'failed')),
   UNIQUE (workflow_id, execution_index)
 );
+
+CREATE UNIQUE INDEX idx_single_active_execution
+ON workflow_executions (workflow_id)
+WHERE status NOT IN ('completed', 'failed');
 
 CREATE TABLE workflow_dependencies (
   id VARCHAR(255) NOT NULL PRIMARY KEY,

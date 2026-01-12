@@ -11,7 +11,7 @@ use crate::{
         ApiError, ApiListResponse, Context, JsonBody, TenantId, executions,
         models::{CronJob, Execution, HttpRequest},
     },
-    id,
+    id, util,
 };
 
 struct IntermediateCronJob {
@@ -213,24 +213,16 @@ async fn create_cron_job(
         .map(|(k, v)| format!("{k}: {v}"))
         .collect();
 
-    let body_bytes = create_opts
-        .request
-        .body
-        .as_ref()
-        .map(|b| b.len() as i32)
-        .unwrap_or(0);
-
     sqlx::query!(
         r#"
-      INSERT INTO http_requests (id, method, url, headers, body, bytes_used)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO http_requests (id, method, url, headers, body)
+      VALUES ($1, $2, $3, $4, $5)
       "#,
         request_id,
         create_opts.request.method,
         create_opts.request.url,
         &headers,
         create_opts.request.body,
-        body_bytes
     )
     .execute(&mut *txn)
     .await?;
@@ -682,6 +674,8 @@ async fn delete_cron_job(
     )
     .execute(&mut *txn)
     .await?;
+
+    util::http_requests::delete_http_req(existing.req_id, &mut txn).await?;
 
     txn.commit().await?;
 

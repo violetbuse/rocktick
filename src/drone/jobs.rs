@@ -97,12 +97,6 @@ async fn run_job(job: grpc::JobSpec, state: DroneState) {
         Err(err) => Err(err.to_string()),
     };
 
-    let req_body_bytes_used = if let Some(body) = job.body.clone() {
-        body.len() as i64
-    } else {
-        0
-    };
-
     let execution = match response {
         Ok(res) => {
             let success = res.status().is_success();
@@ -137,7 +131,6 @@ async fn run_job(job: grpc::JobSpec, state: DroneState) {
                 }
             }
 
-            let res_bytes_used = body_bytes.len() as i64;
             let text = String::from_utf8_lossy(&body_bytes).to_string();
 
             grpc::JobExecution {
@@ -148,14 +141,12 @@ async fn run_job(job: grpc::JobSpec, state: DroneState) {
                     status,
                     headers,
                     body: text,
-                    bytes_used: res_bytes_used,
                 }),
                 response_error: None,
                 req_method: job.method,
                 req_url: job.url,
                 req_headers: job.headers,
                 req_body: job.body,
-                req_body_bytes_used,
                 executed_at,
             }
         }
@@ -169,7 +160,6 @@ async fn run_job(job: grpc::JobSpec, state: DroneState) {
             req_url: job.url,
             req_headers: job.headers,
             req_body: job.body,
-            req_body_bytes_used,
             executed_at,
         },
     };
