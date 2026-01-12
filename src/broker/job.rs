@@ -78,7 +78,7 @@ pub async fn get_jobs(
             lock_nonce = extract(epoch from now()),
             times_locked = times_locked + 1
           WHERE id IN (SELECT id FROM jobs_to_lock)
-          RETURNING id, tenant_id
+          RETURNING id, tenant_id, lock_nonce
         ),
         updated_tenants AS (
           UPDATE tenants tenant
@@ -94,7 +94,7 @@ pub async fn get_jobs(
         )
         SELECT
           job.id as job_id,
-          job.lock_nonce,
+          updated_jobs.lock_nonce,
           job.scheduled_at,
           job.timeout_ms,
           job.max_response_bytes,

@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use clap::{Parser, Subcommand};
 use sqlx::postgres::PgPoolOptions;
 use tokio::select;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{drone::store::DroneStore, secrets::KeyRing};
 
@@ -497,8 +497,12 @@ fn main() -> anyhow::Result<()> {
         ));
     }
 
+    let console_layer = console_subscriber::spawn();
+    let stdout_layer = tracing_subscriber::fmt::layer().with_filter(EnvFilter::new("info"));
+
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
+        .with(console_layer)
+        .with(stdout_layer)
         .with(sentry::integrations::tracing::layer())
         .init();
 
