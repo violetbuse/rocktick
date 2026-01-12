@@ -1,6 +1,7 @@
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
 
 use chrono::Utc;
+use rand::random;
 use replace_err::ReplaceErr;
 use reqwest::Client;
 use tokio::{select, sync::mpsc};
@@ -75,7 +76,10 @@ async fn run_job(job: grpc::JobSpec, state: DroneState) {
 
     tokio::time::sleep(Duration::from_millis(millis_until)).await;
 
-    println!("Executing job {}", job.job_id);
+    tracing::info! {
+      job_id = job.job_id,
+      "Executing job."
+    };
     let executed_at = Utc::now().timestamp();
     let response = match public_addr {
         Ok(addr) => {
@@ -217,6 +221,8 @@ async fn submit_job_results(state: DroneState) -> anyhow::Result<()> {
     if !execution_results.is_empty() {
         let (tx, rx) = mpsc::channel(8);
 
+        let nonce = random::<i64>();
+
         let iter_state = state.clone();
         tokio::spawn(async move {
             let mut remaining = Vec::new();
@@ -236,9 +242,54 @@ async fn submit_job_results(state: DroneState) -> anyhow::Result<()> {
         tokio::spawn(async move {
             let req = Request::new(ReceiverStream::new(rx));
 
-            if let Err(e) = client.record_execution(req).await {
-                eprintln!("Error submitting job results {e:?}");
-                let _ = submission_state.error_tx.send(e.into()).await;
+            match client.record_execution(req).await {
+                Err(error) => {
+                    tracing::error! {
+                      %error,
+                      "Failed to submit job results."
+                    };
+                }
+                Ok(aknowledgements) => {
+                    let mut stream = aknowledgements.into_inner();
+                    loop {
+                        match stream.message().await {
+                            Ok(Some(ack)) => {
+                                let mark_res = submission_state
+                                    .store
+                                    .mark_successfully_synced(ack.job_id.clone())
+                                    .await;
+
+                                if let Err(e) = mark_res {
+                                    tracing::error! {
+                                        %e,
+                                        job_id = ack.job_id,
+                                        "Error marking synced."
+                                    }
+                                }
+                            }
+                            Ok(None) => {
+                                break;
+                            }
+                            Err(status) => {
+                                tracing::error! {
+                                    %status,
+                                    "Error receiving acknowledgement from server."
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Err(error) = submission_state
+                .store
+                .cleanup_executions_post_sync(nonce)
+                .await
+            {
+                tracing::error! {
+                  %error,
+                  "Error cleaning up submission state after sync."
+                };
             }
         });
     }

@@ -1,9 +1,10 @@
 use std::{net::IpAddr, path::PathBuf, sync::OnceLock};
 
-use anyhow::{Ok, anyhow};
+use anyhow::anyhow;
 use clap::{Parser, Subcommand};
 use sqlx::postgres::PgPoolOptions;
 use tokio::select;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{drone::store::DroneStore, secrets::KeyRing};
 
@@ -476,17 +477,41 @@ async fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     let _ = dotenvy::dotenv_override();
 
-    let result = run().await;
-
-    if let Err(err) = result {
-        eprintln!("Error: {:?}", err);
-    } else {
-        println!("Program stopped.");
+    if let Ok(sentry_key) = std::env::var("ROCKTICK_SENTRY_KEY") {
+        let _guard = sentry::init((
+            sentry_key,
+            sentry::ClientOptions {
+                release: sentry::release_name!(),
+                traces_sample_rate: 1.0,
+                enable_logs: true,
+                ..sentry::ClientOptions::default()
+            },
+        ));
     }
 
-    Ok(())
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(sentry::integrations::tracing::layer())
+        .init();
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(async {
+            let result = run().await;
+
+            if let Err(err) = result {
+                tracing::error! {
+                  %err,
+                  "Rocktick stopped on error."
+                };
+            } else {
+                println!("Program stopped.");
+            }
+
+            Ok(())
+        })
 }

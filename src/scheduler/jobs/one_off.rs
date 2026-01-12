@@ -45,7 +45,10 @@ impl Scheduler for OneOffScheduler {
 
         let to_schedule = job_to_schedule.unwrap();
 
-        println!("Scheduling {}", to_schedule.id);
+        tracing::info! {
+          job_id = to_schedule.id,
+          "Scheduling one-off job."
+        };
 
         let scheduled_time = DateTime::from_timestamp_secs(to_schedule.execute_at)
             .expect("Failed to create DateTime from one off job timestamp.");

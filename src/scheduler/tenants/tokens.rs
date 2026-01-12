@@ -35,6 +35,12 @@ impl Scheduler for TenantTokenScheduler {
         let new_tokens = (tenant.tokens + tenant.increment).min(tenant.max_tokens);
         let period = tenant.period;
 
+        tracing::info! {
+          tenant_id = tenant.id,
+          new_tokens,
+          "Increasing tenant tokens."
+        };
+
         let period_time_delta =
             TimeDelta::days(period.days as i64) + TimeDelta::microseconds(period.microseconds);
 

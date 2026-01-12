@@ -53,7 +53,10 @@ impl Scheduler for RetryScheduler {
 
         let to_retry = failed_scheduled_job.unwrap();
 
-        println!("Scheduling retry for {}", to_retry.id);
+        tracing::info! {
+          job_id = to_retry.id,
+          "Scheduling retry for job."
+        };
 
         let retry_query = sqlx::query!(
             r#"

@@ -70,7 +70,10 @@ impl Scheduler for CronScheduler {
 
         let cron_job = cron_job.unwrap();
 
-        println!("Scheduling {}", cron_job.id);
+        tracing::info! {
+          cron_job_id = cron_job.id,
+          "Scheduling cron job."
+        };
 
         let latest_scheduled = sqlx::query!(
             r#"

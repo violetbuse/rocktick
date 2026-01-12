@@ -165,10 +165,12 @@ pub async fn get_jobs(
                         match signing_secret.decrypt(&key_ring) {
                             Ok(decrypted) => Some(decrypted),
                             Err(err) => {
-                                eprintln!(
-                                    "Error decrypting signing secret {} for tenant {}: {:?}",
-                                    signing_secret.id, tenant_id, err
-                                );
+                                tracing::error! {
+                                  %err,
+                                  %tenant_id,
+                                  signing_secret_id = signing_secret.id,
+                                  "Error decrypting signing secret for tenant."
+                                };
                                 None
                             }
                         }
@@ -192,11 +194,11 @@ pub async fn get_jobs(
                     match signature_result {
                         Ok(signature) => Some(signature),
                         Err(signing_error) => {
-                            eprintln!(
-                                "Error signing request {}: {:?}",
-                                job.job_id.clone(),
-                                signing_error
-                            );
+                            tracing::error! {
+                              job_id = job.job_id.clone(),
+                              %signing_error,
+                              "Error signing request",
+                            };
                             None
                         }
                     }
@@ -343,10 +345,10 @@ pub async fn record_execution(
                         let executed_at = DateTime::from_timestamp_secs(execution.executed_at);
 
                         if executed_at.is_none() {
-                            eprintln!(
-                                "Drone returned invalid executed_at time {}",
-                                execution.executed_at
-                            );
+                            tracing::error! {
+                              execution_executed_at = execution.executed_at,
+                                "Drone returned invalid executed_at time",
+                            };
                         }
 
                         let executed_at = executed_at.unwrap_or(Utc::now());
@@ -408,18 +410,21 @@ pub async fn record_execution(
                     .await;
 
                     if let Err(error) = success {
-                        eprintln!(
-                            "Error committing execution to the database for job id {id}: {error:?}"
-                        );
+                        tracing::error! {
+                          job_id = id,
+                          %error,
+                          "Error committing execution to the database for job."
+                        };
                     } else {
                         let execution_response = grpc::RecordExecutionResponse {
                             job_id: execution.job_id,
                         };
 
                         if response.send(Ok(execution_response)).await.is_err() {
-                            eprintln!(
-                                "Error sending execution response for job id {id} to client."
-                            );
+                            tracing::error! {
+                              job_id = id,
+                              "Error sending execution response for job."
+                            };
                         }
                     }
                 });
@@ -480,10 +485,10 @@ pub async fn run_job_cleanup_loop(pool: Pool<Postgres>) -> anyhow::Result<()> {
         .await?;
 
         if result.rows_affected() > 0 {
-            println!(
-                "Cleaned up {} jobs which were not executed properly.",
-                result.rows_affected()
-            );
+            tracing::warn! {
+              count = result.rows_affected(),
+              "Cleaned up jobs which were not executed properly."
+            };
         }
 
         tx.commit().await?;

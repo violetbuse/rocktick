@@ -481,6 +481,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::type_complexity)]
     async fn test_insert_execution_isolated() -> anyhow::Result<()> {
         let store = DroneStore::in_memory("test_insert_execution_isolated").await?;
 
@@ -549,7 +550,7 @@ mod tests {
         .await?;
 
         assert_eq!(row.0, job_id);
-        assert_eq!(row.1, true); // success
+        assert!(row.1); // success
         assert_eq!(row.2, 100); // lock_nonce
         assert!(row.3.is_some()); // response_id should be some
         assert_eq!(row.4, None); // response_error
@@ -561,7 +562,7 @@ mod tests {
         assert_eq!(row.8, Some(req_body)); // req_body
         assert_eq!(row.9, 20); // req_body_bytes_used
         assert_eq!(row.10, 1111111111); // executed_at
-        assert_eq!(row.11, true); // is_local
+        assert!(row.11); // is_local
         assert_eq!(row.12, 0); // replicated_times
         assert_eq!(row.13, "local"); // sync_status
         assert_eq!(row.14, None); // sync_time
@@ -645,7 +646,7 @@ mod tests {
         let (execution, metadata) = store.get_execution(job_id.clone()).await?;
 
         assert_eq!(execution.job_id, job_id);
-        assert_eq!(execution.success, false);
+        assert!(execution.success);
         assert_eq!(execution.lock_nonce, 55);
         assert_eq!(execution.req_method, "DELETE");
         assert_eq!(execution.req_url, "http://delete.me");
@@ -660,7 +661,7 @@ mod tests {
         assert_eq!(resp.body, "Not Found");
         assert_eq!(resp.bytes_used, 100);
 
-        assert_eq!(metadata.is_local, false);
+        assert!(metadata.is_local);
         assert_eq!(metadata.replicated_times, 3);
         assert!(matches!(metadata.sync_status, SyncStatus::Pending));
         assert_eq!(metadata.sync_time.timestamp(), 3333333333);
