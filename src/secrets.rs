@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::Debug, str::FromStr};
 
 use aes_gcm::{
     Aes256Gcm, KeyInit,
@@ -8,7 +8,7 @@ use sqlx::{Executor, Postgres};
 use thiserror::Error;
 use zeroize::Zeroize;
 
-#[derive(Debug)]
+#[derive()]
 pub struct Secret {
     pub id: String,
     pub master_key_id: i32,
@@ -20,6 +20,17 @@ pub struct Secret {
     pub algorithm: String,
 }
 
+impl Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Secret")
+            .field("id", &self.id)
+            .field("master_key_id", &self.master_key_id)
+            .field("secret_version", &self.secret_version)
+            .field("algorithm", &self.algorithm)
+            .finish()
+    }
+}
+
 impl Drop for Secret {
     fn drop(&mut self) {
         self.encrypted_dek.zeroize();
@@ -29,10 +40,16 @@ impl Drop for Secret {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Key {
     pub id: i32,
     key: [u8; 32],
+}
+
+impl Debug for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Key").field("id", &self.id).finish()
+    }
 }
 
 impl Drop for Key {

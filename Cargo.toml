@@ -57,6 +57,3 @@ zeroize = "1.8.2"
 [build-dependencies]
 tonic-prost-build = "0.14.2"
 postgresql_embedded = { version = "0.20.0", default-features = false, features = ["rustls", "theseus", "tokio", "bundled"] }
-
-[build]
-rustflags = ["--cfg", "tokio_unstable"]

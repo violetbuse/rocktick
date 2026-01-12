@@ -1,2 +1,5 @@
 [env]
 POSTGRESQL_VERSION="=18.1.0"
+
+[build]
+rustflags = ["--cfg", "tokio_unstable"]
