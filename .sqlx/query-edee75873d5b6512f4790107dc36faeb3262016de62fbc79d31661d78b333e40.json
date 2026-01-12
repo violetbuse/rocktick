@@ -52,11 +52,6 @@
         "ordinal": 9,
         "name": "max_retries",
         "type_info": "Int4"
-      },
-      {
-        "ordinal": 10,
-        "name": "retry_count",
-        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -72,7 +67,6 @@
       false,
       true,
       true,
-      false,
       false
     ]
   },

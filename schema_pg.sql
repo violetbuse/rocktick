@@ -2,6 +2,7 @@
 CREATE TABLE drones (
   id VARCHAR(255) NOT NULL PRIMARY KEY,
   ip inet NOT NULL,
+  port INTEGER NOT NULL,
   region TEXT NOT NULL,
   last_checkin TIMESTAMPTZ NOT NULL,
   checkin_by TIMESTAMPTZ NOT NULL,

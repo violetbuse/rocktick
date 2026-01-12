@@ -1,11 +1,6 @@
-use std::str::FromStr;
-
 use indoc::indoc;
 use postgresql_embedded::{PostgreSQL, Settings, VersionReq};
-use sqlx::{
-    ConnectOptions, Pool, Postgres,
-    postgres::{PgConnectOptions, PgPoolOptions},
-};
+use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 
 include!(concat!(env!("OUT_DIR"), "/embedded_postgres_version.rs"));
 

@@ -11,8 +11,9 @@ service Broker {
 message DroneCheckinRequest {
   string drone_id = 1;
   string drone_ip = 2;
-  string drone_region = 3;
-  int64 drone_time_ms = 4;
+  int64 drone_port = 3;
+  string drone_region = 4;
+  int64 drone_time_ms = 5;
 }
 
 message DroneCheckinResponse {
@@ -26,7 +27,8 @@ message GetDronesRequest {
 message GetDronesResponse {
   string id = 1;
   string ip = 2;
-  string region = 3;
+  int64 port = 3;
+  string region = 4;
 }
 
 message GetJobsRequest {

@@ -12,6 +12,7 @@ pub struct OneOffScheduler;
 
 #[async_trait::async_trait]
 impl Scheduler for OneOffScheduler {
+    #[tracing::instrument(name = "OneOffScheduler::run_once")]
     async fn run_once(ctx: &SchedulerContext, reached_end: &mut bool) -> anyhow::Result<()> {
         let mut tx = ctx.pool.begin().await?;
 

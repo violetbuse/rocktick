@@ -32,6 +32,7 @@ struct CreateTenant {
     max_cron_jobs: i32,
 }
 
+#[tracing::instrument(name = "api_create_tenant")]
 async fn create_tenant(
     State(ctx): State<Context>,
     TenantId(tenant_id): TenantId,
@@ -111,6 +112,7 @@ async fn create_tenant(
     Ok(tenant)
 }
 
+#[tracing::instrument(name = "api_get_tenant")]
 async fn get_tenant(
     State(ctx): State<Context>,
     TenantId(requesting_tenant_id): TenantId,
@@ -173,6 +175,7 @@ impl IntoResponse for UsageResult {
     }
 }
 
+#[tracing::instrument(name = "api_get_tenant_usage")]
 async fn get_tenant_usage(
     State(ctx): State<Context>,
     TenantId(requesting_tenant_id): TenantId,
@@ -230,6 +233,7 @@ struct UpdateTenant {
     max_delay_days: Option<i32>,
 }
 
+#[tracing::instrument(name = "api_update_tenant")]
 async fn update_tenant(
     State(ctx): State<Context>,
     Path(tenant_id): Path<String>,
@@ -349,6 +353,7 @@ impl IntoResponse for SigningSecretData {
     }
 }
 
+#[tracing::instrument(name = "api_rotate_secrets")]
 async fn rotate_secrets(
     State(ctx): State<Context>,
     TenantId(requesting_tenant_id): TenantId,
@@ -435,6 +440,7 @@ async fn rotate_secrets(
     })
 }
 
+#[tracing::instrument(name = "api_get_secrets")]
 async fn get_secrets(
     State(ctx): State<Context>,
     TenantId(requesting_tenant_id): TenantId,

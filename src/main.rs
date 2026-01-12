@@ -67,6 +67,8 @@ pub struct DevOptions {
     api_port: usize,
     #[arg(long, default_value_t = 30001)]
     broker_port: usize,
+    #[arg(long, default_value_t = 30002)]
+    drone_port: usize,
     #[arg(long, default_value = "na-east")]
     /// The region the executor will run in.
     region: String,
@@ -306,6 +308,8 @@ pub struct DroneOptions {
     id: String,
     #[arg(long, value_parser, env = "DRONE_IP_ADDR")]
     ip: IpAddr,
+    #[arg(long, default_value_t = 30002)]
+    port: usize,
     #[arg(long, value_parser, env = "DRONE_STORE_PATH")]
     store_path: PathBuf,
     #[arg(long, default_value_t = false)]
@@ -323,6 +327,7 @@ impl TryFrom<DevOptions> for DroneOptions {
             ip: "127.0.0.1"
                 .parse()
                 .expect("127.0.0.1 is not a valid ip apparently???"),
+            port: value.drone_port,
             store_path: DroneStore::default_store_location()?,
             store_in_memory: true,
         })

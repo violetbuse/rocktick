@@ -92,6 +92,7 @@ struct CreateCronJob {
   ),
   tag = "cron jobs"
 )]
+#[tracing::instrument(name = "api_create_cron_job")]
 async fn create_cron_job(
     State(ctx): State<Context>,
     TenantId(tenant_id): TenantId,
@@ -289,6 +290,7 @@ struct QueryParams {
     (status = "5XX", body = ApiError)),
   tag = "cron jobs"
 )]
+#[tracing::instrument(name = "api_list_cron_jobs")]
 async fn list_cron_jobs(
     State(ctx): State<Context>,
     TenantId(tenant_id): TenantId,
@@ -376,6 +378,7 @@ struct UpdateCronJob {
     (status = "5XX", description = "Invalid request", body = ApiError)),
   tag = "cron jobs"
 )]
+#[tracing::instrument(name = "api_update_cron_job")]
 async fn update_cron_job(
     State(ctx): State<Context>,
     Path(job_id): Path<String>,
@@ -593,6 +596,7 @@ async fn update_cron_job(
     (status = "5XX", description = "Invalid request", body = ApiError)),
   tag = "cron jobs"
 )]
+#[tracing::instrument(name = "api_delete_cron_job")]
 async fn delete_cron_job(
     State(ctx): State<Context>,
     Path(job_id): Path<String>,
@@ -694,6 +698,7 @@ async fn delete_cron_job(
     (status = "5XX", description = "Invalid request", body = ApiError)),
   tag = "cron jobs"
 )]
+#[tracing::instrument(name = "api_get_cron_job")]
 async fn get_cron_job(
     State(ctx): State<Context>,
     Path(job_id): Path<String>,

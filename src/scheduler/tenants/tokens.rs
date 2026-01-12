@@ -9,6 +9,7 @@ pub struct TenantTokenScheduler;
 
 #[async_trait::async_trait]
 impl Scheduler for TenantTokenScheduler {
+    #[tracing::instrument(name = "TenantTokenScheduler::run_once")]
     async fn run_once(ctx: &SchedulerContext, reached_end: &mut bool) -> anyhow::Result<()> {
         let mut tx = ctx.pool.begin().await?;
 

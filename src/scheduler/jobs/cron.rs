@@ -16,6 +16,7 @@ pub struct CronScheduler;
 
 #[async_trait::async_trait]
 impl Scheduler for CronScheduler {
+    #[tracing::instrument(name = "CronScheduler::run_once")]
     async fn run_once(ctx: &SchedulerContext, reached_end: &mut bool) -> anyhow::Result<()> {
         let mut tx = ctx.pool.begin().await?;
 

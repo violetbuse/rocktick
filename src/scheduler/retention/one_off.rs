@@ -12,6 +12,7 @@ pub struct OneOffPastRetention;
 impl Scheduler for OneOffPastRetention {
     const WAIT: Duration = Duration::from_mins(30);
 
+    #[tracing::instrument(name = "OneOffPastRetention::run_once")]
     async fn run_once(ctx: &SchedulerContext, reached_end: &mut bool) -> anyhow::Result<()> {
         let mut tx = ctx.pool.begin().await?;
 

@@ -26,16 +26,18 @@ pub async fn handle_checkin(
 
     sqlx::query!(
         r#"
-    INSERT INTO drones (id, ip, region, last_checkin, checkin_by)
-    VALUES ($1, $2, $3, now(), now() + interval '15 seconds')
+    INSERT INTO drones (id, ip, port, region, last_checkin, checkin_by)
+    VALUES ($1, $2, $3, $4, now(), now() + interval '15 seconds')
     ON CONFLICT (id) DO UPDATE SET
       ip = EXCLUDED.ip,
+      port = EXCLUDED.port,
       region = EXCLUDED.region,
       last_checkin = now(),
       checkin_by = now() + interval '15 seconds';
   "#,
         drone_info.drone_id,
         ip_network,
+        drone_info.drone_port as i32,
         drone_info.drone_region
     )
     .execute(&svc.pool)
@@ -81,6 +83,7 @@ pub async fn handle_get_drones(
                 let response = grpc::GetDronesResponse {
                     id: drone.id,
                     ip: drone.ip.to_string(),
+                    port: drone.port as i64,
                     region: drone.region,
                 };
 

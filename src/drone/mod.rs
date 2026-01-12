@@ -21,6 +21,7 @@ pub struct Config {
     region: String,
     id: String,
     ip: IpAddr,
+    port: usize,
     store_location: PathBuf,
     store_in_memory: bool,
 }
@@ -32,6 +33,7 @@ impl Config {
             region: options.region,
             id: options.id,
             ip: options.ip,
+            port: options.port,
             store_location: options.store_path,
             store_in_memory: options.store_in_memory,
         }
@@ -42,6 +44,7 @@ impl Config {
 pub struct Drone {
     id: String,
     ip: IpAddr,
+    port: usize,
     region: String,
 }
 
@@ -49,6 +52,7 @@ pub struct Drone {
 struct DroneState {
     id: String,
     ip: IpAddr,
+    port: usize,
     exec_results: Arc<Mutex<Vec<grpc::JobExecution>>>,
     broker_url: String,
     region: String,
@@ -75,6 +79,7 @@ pub async fn start(config: Config) -> anyhow::Result<()> {
     let state = DroneState {
         id: config.id,
         ip: config.ip,
+        port: config.port,
         exec_results: Arc::new(Mutex::new(Vec::new())),
         broker_url: config.broker_url.clone(),
         region: config.region.clone(),

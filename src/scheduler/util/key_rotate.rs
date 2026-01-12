@@ -8,6 +8,7 @@ pub struct KeyRotationScheduler;
 
 #[async_trait::async_trait]
 impl Scheduler for KeyRotationScheduler {
+    #[tracing::instrument(name = "KeyRotationScheduler::run_once")]
     async fn run_once(ctx: &SchedulerContext, reached_end: &mut bool) -> anyhow::Result<()> {
         let latest_key = ctx.key_ring.max();
 

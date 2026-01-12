@@ -16,6 +16,7 @@ async fn check_in(state: &DroneState) -> anyhow::Result<Duration> {
         .drone_checkin(Request::new(grpc::DroneCheckinRequest {
             drone_id: state.id.clone(),
             drone_ip: state.ip.to_string(),
+            drone_port: state.port as i64,
             drone_region: state.region.clone(),
             drone_time_ms: Utc::now().timestamp_millis(),
         }))
@@ -57,6 +58,7 @@ async fn refresh_drones(state: &DroneState) -> anyhow::Result<()> {
             drones.push(Drone {
                 id: drone.id,
                 ip,
+                port: drone.port as usize,
                 region: drone.region,
             });
         }

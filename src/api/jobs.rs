@@ -89,6 +89,7 @@ struct CreateJob {
   ),
   tag = "one off jobs"
 )]
+#[tracing::instrument(name = "api_create_job")]
 async fn create_job(
     State(ctx): State<Context>,
     TenantId(tenant_id): TenantId,
@@ -259,6 +260,7 @@ struct QueryParams {
     (status = "5XX", body = ApiError)),
   tag = "one off jobs"
 )]
+#[tracing::instrument(name = "api_list_jobs")]
 async fn list_jobs(
     State(ctx): State<Context>,
     TenantId(tenant_id): TenantId,
@@ -350,6 +352,7 @@ struct UpdateJob {
     (status = "5XX", description = "Invalid request", body = ApiError)),
   tag = "one off jobs"
 )]
+#[tracing::instrument(name = "api_update_job")]
 async fn update_job(
     State(ctx): State<Context>,
     Path(job_id): Path<String>,
@@ -592,6 +595,7 @@ async fn update_job(
     (status = "5XX", description = "Invalid request", body = ApiError)),
   tag = "one off jobs"
 )]
+#[tracing::instrument(name = "api_get_job")]
 async fn get_job(
     State(ctx): State<Context>,
     Path(job_id): Path<String>,
@@ -659,6 +663,7 @@ async fn get_job(
     (status = "5XX", description = "Invalid request", body = ApiError)),
   tag = "one off jobs"
 )]
+#[tracing::instrument(name = "api_delete_job")]
 async fn delete_job(
     State(ctx): State<Context>,
     Path(job_id): Path<String>,

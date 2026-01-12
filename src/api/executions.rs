@@ -105,6 +105,7 @@ struct QueryParams {
     (status = "5XX", body = ApiError)),
   tag = "executions"
 )]
+#[tracing::instrument(name = "api_list_executions")]
 async fn list_executions(
     State(ctx): State<Context>,
     TenantId(tenant_id): TenantId,
@@ -196,6 +197,7 @@ async fn list_executions(
     ),
     tag = "executions"
 )]
+#[tracing::instrument(name = "api_get_execution")]
 async fn get_execution(
     State(ctx): State<Context>,
     Path(execution_id): Path<String>,
