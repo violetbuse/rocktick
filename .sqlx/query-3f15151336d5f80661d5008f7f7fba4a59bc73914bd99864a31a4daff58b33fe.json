@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n              INSERT INTO workflows\n                (id, region, tenant_id, implementation_url, input, status, max_retries)\n              VALUES\n                ($1, $2, $3, $4, $5, 'pending', $6)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Text",
+        "Jsonb",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3f15151336d5f80661d5008f7f7fba4a59bc73914bd99864a31a4daff58b33fe"
+}

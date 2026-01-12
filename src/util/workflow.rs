@@ -8,25 +8,17 @@ use url::Url;
 #[serde(untagged)]
 pub enum WaitDefinition {
     V1Struct {
-        name: String,
         #[serde(with = "ts_seconds")]
         wait_until: DateTime<Utc>,
     },
-    V1Tuple(String, #[serde(with = "ts_seconds")] DateTime<Utc>),
+    V1Tuple(#[serde(with = "ts_seconds")] DateTime<Utc>),
 }
 
 impl WaitDefinition {
-    pub fn name(&self) -> String {
-        match self {
-            WaitDefinition::V1Struct { name, .. } => name.clone(),
-            WaitDefinition::V1Tuple(name, _) => name.clone(),
-        }
-    }
-
     pub fn wait_until(&self) -> DateTime<Utc> {
         match self {
             WaitDefinition::V1Struct { wait_until, .. } => *wait_until,
-            WaitDefinition::V1Tuple(_, wait_until) => *wait_until,
+            WaitDefinition::V1Tuple(wait_until) => *wait_until,
         }
     }
 }
@@ -34,7 +26,11 @@ impl WaitDefinition {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum ChildDefinition {
-    V1Struct { url: Url, input: serde_json::Value },
+    V1Struct {
+        url: Url,
+        input: serde_json::Value,
+        max_retries: Option<i32>,
+    },
     V1Tuple(Url, serde_json::Value),
 }
 
@@ -50,6 +46,13 @@ impl ChildDefinition {
         match self {
             ChildDefinition::V1Struct { input, .. } => input.clone(),
             ChildDefinition::V1Tuple(_, input) => input.clone(),
+        }
+    }
+
+    pub fn max_retries(&self) -> i32 {
+        match self {
+            ChildDefinition::V1Struct { max_retries, .. } => max_retries.unwrap_or(9),
+            ChildDefinition::V1Tuple(_, _) => 9,
         }
     }
 }

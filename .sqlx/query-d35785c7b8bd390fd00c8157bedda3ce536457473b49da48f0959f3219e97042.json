@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO workflow_dependencies\n                  (id, workflow_execution_id, child_workflow_name, child_workflow_id)\n                VALUES\n                  ($1, $2, $3, $4)\n              ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d35785c7b8bd390fd00c8157bedda3ce536457473b49da48f0959f3219e97042"
+}

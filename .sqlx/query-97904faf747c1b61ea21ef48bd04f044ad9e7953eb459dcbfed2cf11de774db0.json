@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n              INSERT INTO workflow_dependencies\n                (id, workflow_execution_id, wait_name, wait_until)\n              VALUES\n                ($1, $2, $3, $4)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "97904faf747c1b61ea21ef48bd04f044ad9e7953eb459dcbfed2cf11de774db0"
+}
