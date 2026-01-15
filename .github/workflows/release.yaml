@@ -19,26 +19,17 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: rocktick_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    env:
-      DATABASE_URL: postgres://user:password@localhost:5432/rocktick_test
-
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Postgres
+        uses: ikalnytskyi/action-setup-postgres@v8
+        id: postgres
+        with:
+          username: user
+          password: password
+          database: rocktick_db
+          postgres-version: "18"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -68,6 +59,8 @@ jobs:
 
       - name: Run migrations
         run: sqlx migrate run --source migrations/postgres
+        env:
+          DATABASE_URL: ${{ steps.postgres.outputs.connection-uri }}
 
       - name: Cache cargo build
         uses: actions/cache@v3
@@ -81,6 +74,8 @@ jobs:
         run: cargo test --all-features
         env:
           GITHUB_TOKEN: ${{ secrets.READONLY_PAT }}
+          DATABASE_URL: ${{ steps.postgres.outputs.connection-uri }}
+
   build:
     name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
@@ -112,6 +107,15 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Postgres
+        uses: ikalnytskyi/action-setup-postgres@v8
+        id: postgres
+        with:
+          username: user
+          password: password
+          database: rocktick_db
+          postgres-version: "18"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -178,12 +182,21 @@ jobs:
           restore-keys: |
             cargo-build-${{ runner.os }}-${{ matrix.target }}-
 
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features postgres,rustls
+
+      - name: Run migrations
+        run: sqlx migrate run --source migrations/postgres
+        env:
+          DATABASE_URL: ${{ steps.postgres.outputs.connection-uri }}
+
       - name: Build
         run: |
           cargo build --release --target ${{ matrix.target }}
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.READONLY_PAT }}
+          DATABASE_URL: ${{ steps.postgres.outputs.connection-uri }}
 
       - name: Install zip
         if: runner.os == 'Windows'
