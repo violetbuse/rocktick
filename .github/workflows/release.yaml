@@ -127,7 +127,8 @@ jobs:
         if: contains(matrix.target, 'musl')
         run: |
           sudo apt-get update
-          sudo apt get install -y musl-tools build-essential
+          sudo apt-get install -y musl-tools build-essential
+          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 
       - name: Install Protobuf compiler (Linux)
         if: runner.os == 'Linux'
