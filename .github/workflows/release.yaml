@@ -123,6 +123,12 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install musl Toolchain (Linux)
+        if: contains(matrix.target, 'musl')
+        run: |
+          sudo apt-get update
+          sudo apt get install -y musl-tools build-essential
+
       - name: Install Protobuf compiler (Linux)
         if: runner.os == 'Linux'
         run: |
