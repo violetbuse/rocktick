@@ -123,26 +123,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install musl Toolchain (Linux)
+      - name: Install Zig and zigbuild
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools build-essential
-          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
-
-      - name: Install musl cross compiler for ARM
-        if: matrix.target == 'aarch64-unknown-linux-musl'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools gcc-aarch64-linux-gnu
-
-      - name: Set ARM musl compiler
-        if: matrix.target == 'aarch64-unknown-linux-musl'
-        run: |
-          echo "CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          # Disable GLIBC-specific buffer checks and force standard C
-          echo "CFLAGS_aarch64_unknown_linux_musl=-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0" >> $GITHUB_ENV
+          sudo snap install zig --classic --beta
+          pip install cargo-zigbuild
 
       - name: Install Protobuf compiler (Linux)
         if: runner.os == 'Linux'
@@ -195,7 +180,11 @@ jobs:
 
       - name: Build
         run: |
-          cargo build --release --target ${{ matrix.target }}
+          if [[ "${{ matrix.target }}" == *"linux-musl"* ]]; then
+            cargo zigbuild --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.READONLY_PAT }}
