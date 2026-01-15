@@ -1,6 +1,6 @@
 [package]
 name = "rocktick"
-version = "0.2.24"
+version = "0.2.25"
 edition = "2024"
 
 [lints.rust]
@@ -33,7 +33,7 @@ prost = "0.14.1"
 rand = "0.9.2"
 replace_err = "1.0.0"
 reqwest = { version = "0.12.24", default-features = false, features = ["json", "rustls-tls"] }
-sentry = {version = "0.46.1", default-features = false, features = ["backtrace", "contexts", "panic", "transport", "anyhow", "debug-images", "reqwest", "rustls", "tracing", "logs"]}
+sentry = {version = "0.46.1", default-features = false, features = ["backtrace", "contexts", "panic", "anyhow", "debug-images", "reqwest", "rustls", "tracing", "logs"]}
 serde = { version = "1.0.228", features = ["serde_derive"] }
 serde_json = "1.0.145"
 serde_with = "3.16.1"
