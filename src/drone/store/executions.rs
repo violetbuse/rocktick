@@ -1,4 +1,7 @@
-use crate::{drone::store::DroneStore, grpc};
+use crate::{
+    drone::store::{DroneStore, MIGRATOR},
+    grpc,
+};
 use anyhow::{Context, anyhow};
 use chrono::{DateTime, Duration, Utc};
 use sqlx::prelude::FromRow;
@@ -376,11 +379,13 @@ fn intermediate_to_execution(
 
 #[cfg(test)]
 mod tests {
+    use sqlx::SqlitePool;
+
     use super::*;
 
-    #[tokio::test]
-    async fn test_insert_and_get_execution() -> anyhow::Result<()> {
-        let store = DroneStore::in_memory("test_insert_and_get_execution").await?;
+    #[sqlx::test(migrator = "MIGRATOR")]
+    async fn test_insert_and_get_execution(pool: SqlitePool) -> anyhow::Result<()> {
+        let store = DroneStore::from_pool(pool);
 
         let mut req_headers = HashMap::new();
         req_headers.insert("Content-Type".to_string(), "application/json".to_string());
@@ -433,9 +438,9 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_record_replication() -> anyhow::Result<()> {
-        let store = DroneStore::in_memory("test_record_replication").await?;
+    #[sqlx::test(migrator = "MIGRATOR")]
+    async fn test_record_replication(pool: SqlitePool) -> anyhow::Result<()> {
+        let store = DroneStore::from_pool(pool);
         let job_id = "job_rep".to_string();
 
         let execution = JobExecution {
@@ -467,10 +472,10 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[sqlx::test(migrator = "MIGRATOR")]
     #[allow(clippy::type_complexity)]
-    async fn test_insert_execution_isolated() -> anyhow::Result<()> {
-        let store = DroneStore::in_memory("test_insert_execution_isolated").await?;
+    async fn test_insert_execution_isolated(pool: SqlitePool) -> anyhow::Result<()> {
+        let store = DroneStore::from_pool(pool);
 
         let mut req_headers = HashMap::new();
         req_headers.insert("Accept".to_string(), "*/*".to_string());
@@ -568,9 +573,9 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_get_execution_isolated() -> anyhow::Result<()> {
-        let store = DroneStore::in_memory("test_get_execution_isolated").await?;
+    #[sqlx::test(migrator = "MIGRATOR")]
+    async fn test_get_execution_isolated(pool: SqlitePool) -> anyhow::Result<()> {
+        let store = DroneStore::from_pool(pool);
         let job_id = "job_isolated_get".to_string();
         let response_id = "resp_isolated_get".to_string();
 
@@ -677,9 +682,9 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_cleanup_executions_post_sync() -> anyhow::Result<()> {
-        let store = DroneStore::in_memory("test_cleanup_executions_post_sync").await?;
+    #[sqlx::test(migrator = "MIGRATOR")]
+    async fn test_cleanup_executions_post_sync(pool: SqlitePool) -> anyhow::Result<()> {
+        let store = DroneStore::from_pool(pool);
         let job_id_1 = "job_post_sync_1";
         let job_id_2 = "job_post_sync_2";
         let nonce_target = 100;
@@ -715,9 +720,9 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_cleanup_executions() -> anyhow::Result<()> {
-        let store = DroneStore::in_memory("test_cleanup_executions").await?;
+    #[sqlx::test(migrator = "MIGRATOR")]
+    async fn test_cleanup_executions(pool: SqlitePool) -> anyhow::Result<()> {
+        let store = DroneStore::from_pool(pool);
 
         // 1. Stuck pending job (older than 1 hour) -> should become local
         let job_stuck = "job_stuck";
@@ -832,9 +837,9 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_get_job_to_sync() -> anyhow::Result<()> {
-        let store = DroneStore::in_memory("test_get_job_to_sync").await?;
+    #[sqlx::test(migrator = "MIGRATOR")]
+    async fn test_get_job_to_sync(pool: SqlitePool) -> anyhow::Result<()> {
+        let store = DroneStore::from_pool(pool);
 
         // Insert jobs with different execution times
         setup_job_exec(&store.pool, "job1".to_string(), 100, "local".to_string()).await?;
@@ -865,9 +870,9 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_mark_successfully_synced() -> anyhow::Result<()> {
-        let store = DroneStore::in_memory("test_mark_successfully_synced").await?;
+    #[sqlx::test(migrator = "MIGRATOR")]
+    async fn test_mark_successfully_synced(pool: SqlitePool) -> anyhow::Result<()> {
+        let store = DroneStore::from_pool(pool);
         let job_id = "job_sync_complete";
 
         sqlx::query(
@@ -894,9 +899,9 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_duplicate_job_insertion() -> anyhow::Result<()> {
-        let store = DroneStore::in_memory("test_duplicate_job_insertion").await?;
+    #[sqlx::test(migrator = "MIGRATOR")]
+    async fn test_duplicate_job_insertion(pool: SqlitePool) -> anyhow::Result<()> {
+        let store = DroneStore::from_pool(pool);
         let job_id = "job_duplicate";
 
         let execution = JobExecution {
@@ -926,9 +931,9 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_stuck_sync_retry_flow() -> anyhow::Result<()> {
-        let store = DroneStore::in_memory("test_stuck_sync_retry_flow").await?;
+    #[sqlx::test(migrator = "MIGRATOR")]
+    async fn test_stuck_sync_retry_flow(pool: SqlitePool) -> anyhow::Result<()> {
+        let store = DroneStore::from_pool(pool);
         let job_id = "job_stuck_retry";
 
         // 1. Insert local job
@@ -971,9 +976,9 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_idempotency_non_existent() -> anyhow::Result<()> {
-        let store = DroneStore::in_memory("test_idempotency_non_existent").await?;
+    #[sqlx::test(migrator = "MIGRATOR")]
+    async fn test_idempotency_non_existent(pool: SqlitePool) -> anyhow::Result<()> {
+        let store = DroneStore::from_pool(pool);
 
         // Should not fail
         store
@@ -986,9 +991,9 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_zombie_response_cleanup() -> anyhow::Result<()> {
-        let store = DroneStore::in_memory("test_zombie_response_cleanup").await?;
+    #[sqlx::test(migrator = "MIGRATOR")]
+    async fn test_zombie_response_cleanup(pool: SqlitePool) -> anyhow::Result<()> {
+        let store = DroneStore::from_pool(pool);
 
         // 1. Insert execution and response
         let job_id = "job_with_res";

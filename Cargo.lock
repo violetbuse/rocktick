@@ -2661,7 +2661,7 @@ dependencies = [
 
 [[package]]
 name = "rocktick"
-version = "0.2.30"
+version = "0.2.31"
 dependencies = [
  "aes-gcm",
  "anyhow",

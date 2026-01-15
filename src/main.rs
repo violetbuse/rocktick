@@ -312,8 +312,6 @@ pub struct DroneOptions {
     port: usize,
     #[arg(long, value_parser, env = "DRONE_STORE_PATH")]
     store_path: PathBuf,
-    #[arg(long, default_value_t = false)]
-    store_in_memory: bool,
 }
 
 impl TryFrom<DevOptions> for DroneOptions {
@@ -329,7 +327,6 @@ impl TryFrom<DevOptions> for DroneOptions {
                 .expect("127.0.0.1 is not a valid ip apparently???"),
             port: value.drone_port,
             store_path: DroneStore::default_store_location()?,
-            store_in_memory: true,
         })
     }
 }
@@ -340,150 +337,167 @@ pub struct MigrationOptions {
     postgres_url: String,
 }
 
-async fn run() -> anyhow::Result<()> {
-    let cli = Cli::parse();
+impl Cli {
+    async fn run(self) -> anyhow::Result<()> {
+        let is_dev = self.command.is_none() || matches!(self.command, Some(Commands::Dev(_)));
 
-    let is_dev = cli.command.is_none() || matches!(cli.command, Some(Commands::Dev(_)));
+        let global_config = GlobalConfig { is_dev };
 
-    let global_config = GlobalConfig { is_dev };
+        GLOBAL_CONFIG
+            .set(global_config)
+            .expect("Failed to set global config");
 
-    GLOBAL_CONFIG
-        .set(global_config)
-        .expect("Failed to set global config");
+        match self.command {
+            None | Some(Commands::Dev(_)) => {
+                let mut dev_options = self
+                    .command
+                    .and_then(|cmd| {
+                        if let Commands::Dev(dev_opts) = cmd {
+                            Some(dev_opts)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(self.dev);
 
-    match cli.command {
-        None | Some(Commands::Dev(_)) => {
-            let mut dev_options = cli
-                .command
-                .and_then(|cmd| {
-                    if let Commands::Dev(dev_opts) = cmd {
-                        Some(dev_opts)
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or(cli.dev);
+                if dev_options.postgres_url.is_none()
+                    || dev_options
+                        .postgres_url
+                        .clone()
+                        .is_some_and(|val| val.is_empty())
+                {
+                    let connection_url = pg::run_embedded(dev_options.postgres_temporary).await?;
+                    let temp_pool =
+                        pg::create_pool(connection_url.clone(), dev_options.pool_size).await?;
+                    println!("Migrating database...");
+                    pg::migrate_pg(&temp_pool).await?;
+                    dev_options.postgres_url = Some(connection_url)
+                }
 
-            if dev_options.postgres_url.is_none()
-                || dev_options
+                let postgres_url = dev_options
                     .postgres_url
                     .clone()
-                    .is_some_and(|val| val.is_empty())
-            {
-                let connection_url = pg::run_embedded(dev_options.postgres_temporary).await?;
-                let temp_pool =
-                    pg::create_pool(connection_url.clone(), dev_options.pool_size).await?;
-                println!("Migrating database...");
-                pg::migrate_pg(&temp_pool).await?;
-                dev_options.postgres_url = Some(connection_url)
+                    .expect("Somehow no postgres url is present.");
+                println!("Connecting to {postgres_url}");
+
+                let pool = PgPoolOptions::new()
+                    .max_connections(5)
+                    .connect(&postgres_url)
+                    .await?;
+
+                let api_config =
+                    api::Config::from_cli(dev_options.clone().try_into()?, pool.clone()).await;
+                let broker_config =
+                    broker::Config::from_cli(dev_options.clone().try_into()?, pool.clone()).await;
+                let executor_config =
+                    drone::Config::from_cli(dev_options.clone().try_into()?).await;
+                let scheduler_config =
+                    scheduler::Config::from_cli(dev_options.clone().try_into()?, pool.clone())
+                        .await;
+
+                select! {
+                  api_res = api::start(api_config) => {
+                    println!("Api Service Stopped.");
+                    api_res?;
+                  },
+                  broker_res = broker::start(broker_config) => {
+                    println!("Broker Service Stopped.");
+                    broker_res?;
+                  },
+                  executor_res = drone::start(executor_config) => {
+                    println!("Executor Service Stopped.");
+                    executor_res?;
+                  },
+                  scheduler_res = scheduler::start(scheduler_config) => {
+                    println!("Scheduler Service Stopped.");
+                    scheduler_res?;
+                  },
+                  _ = tokio::signal::ctrl_c() => println!("Received Ctrl-C.")
+                }
             }
+            Some(Commands::Server(server_config)) => {
+                let pool =
+                    pg::create_pool(server_config.postgres_url.clone(), server_config.pool_size)
+                        .await?;
 
-            let postgres_url = dev_options
-                .postgres_url
-                .clone()
-                .expect("Somehow no postgres url is present.");
-            println!("Connecting to {postgres_url}");
+                let api_config =
+                    api::Config::from_cli(server_config.clone().into(), pool.clone()).await;
+                let broker_config =
+                    broker::Config::from_cli(server_config.clone().into(), pool.clone()).await;
+                let scheduler_config =
+                    scheduler::Config::from_cli(server_config.clone().into(), pool.clone()).await;
 
-            let pool = PgPoolOptions::new()
-                .max_connections(5)
-                .connect(&postgres_url)
-                .await?;
-
-            let api_config =
-                api::Config::from_cli(dev_options.clone().try_into()?, pool.clone()).await;
-            let broker_config =
-                broker::Config::from_cli(dev_options.clone().try_into()?, pool.clone()).await;
-            let executor_config = drone::Config::from_cli(dev_options.clone().try_into()?).await;
-            let scheduler_config =
-                scheduler::Config::from_cli(dev_options.clone().try_into()?, pool.clone()).await;
-
-            select! {
-              api_res = api::start(api_config) => {
+                select! {
+                  api_res = api::start(api_config) => {
+                    println!("Api Service Stopped.");
+                    api_res?;
+                  },
+                  broker_res = broker::start(broker_config) => {
+                    println!("Broker Service Stopped.");
+                    broker_res?;
+                  },
+                  scheduler_res = scheduler::start(scheduler_config) => {
+                    println!("Scheduler Service Stopped.");
+                    scheduler_res?;
+                  },
+                  _ = tokio::signal::ctrl_c() => println!("Received Ctrl-C.")
+                }
+            }
+            Some(Commands::Api(api_config)) => {
+                let pool =
+                    pg::create_pool(api_config.postgres_url.clone(), api_config.pool_size).await?;
+                let config = api::Config::from_cli(api_config, pool).await;
+                api::start(config).await?;
                 println!("Api Service Stopped.");
-                api_res?;
-              },
-              broker_res = broker::start(broker_config) => {
-                println!("Broker Service Stopped.");
-                broker_res?;
-              },
-              executor_res = drone::start(executor_config) => {
+            }
+            Some(Commands::Broker(broker_config)) => {
+                let pool =
+                    pg::create_pool(broker_config.postgres_url.clone(), broker_config.pool_size)
+                        .await?;
+                let config = broker::Config::from_cli(broker_config, pool).await;
+                broker::start(config).await?;
+                println!("Broker Service Stopped.")
+            }
+            Some(Commands::Scheduler(scheduler_config)) => {
+                let pool = pg::create_pool(
+                    scheduler_config.postgres_url.clone(),
+                    scheduler_config.pool_size,
+                )
+                .await?;
+                let config = scheduler::Config::from_cli(scheduler_config, pool).await;
+                scheduler::start(config).await?;
+                println!("Scheduler Service Stopped.");
+            }
+            Some(Commands::Drone(executor_config)) => {
+                let config = drone::Config::from_cli(executor_config).await;
+                drone::start(config).await?;
                 println!("Executor Service Stopped.");
-                executor_res?;
-              },
-              scheduler_res = scheduler::start(scheduler_config) => {
-                println!("Scheduler Service Stopped.");
-                scheduler_res?;
-              },
-              _ = tokio::signal::ctrl_c() => println!("Received Ctrl-C.")
+            }
+            Some(Commands::Migrate(migrate_config)) => {
+                let pool = pg::create_pool(migrate_config.postgres_url, 2).await?;
+                pg::migrate_pg(&pool).await?;
             }
         }
-        Some(Commands::Server(server_config)) => {
-            let pool = pg::create_pool(server_config.postgres_url.clone(), server_config.pool_size)
-                .await?;
 
-            let api_config =
-                api::Config::from_cli(server_config.clone().into(), pool.clone()).await;
-            let broker_config =
-                broker::Config::from_cli(server_config.clone().into(), pool.clone()).await;
-            let scheduler_config =
-                scheduler::Config::from_cli(server_config.clone().into(), pool.clone()).await;
-
-            select! {
-              api_res = api::start(api_config) => {
-                println!("Api Service Stopped.");
-                api_res?;
-              },
-              broker_res = broker::start(broker_config) => {
-                println!("Broker Service Stopped.");
-                broker_res?;
-              },
-              scheduler_res = scheduler::start(scheduler_config) => {
-                println!("Scheduler Service Stopped.");
-                scheduler_res?;
-              },
-              _ = tokio::signal::ctrl_c() => println!("Received Ctrl-C.")
-            }
-        }
-        Some(Commands::Api(api_config)) => {
-            let pool =
-                pg::create_pool(api_config.postgres_url.clone(), api_config.pool_size).await?;
-            let config = api::Config::from_cli(api_config, pool).await;
-            api::start(config).await?;
-            println!("Api Service Stopped.");
-        }
-        Some(Commands::Broker(broker_config)) => {
-            let pool = pg::create_pool(broker_config.postgres_url.clone(), broker_config.pool_size)
-                .await?;
-            let config = broker::Config::from_cli(broker_config, pool).await;
-            broker::start(config).await?;
-            println!("Broker Service Stopped.")
-        }
-        Some(Commands::Scheduler(scheduler_config)) => {
-            let pool = pg::create_pool(
-                scheduler_config.postgres_url.clone(),
-                scheduler_config.pool_size,
-            )
-            .await?;
-            let config = scheduler::Config::from_cli(scheduler_config, pool).await;
-            scheduler::start(config).await?;
-            println!("Scheduler Service Stopped.");
-        }
-        Some(Commands::Drone(executor_config)) => {
-            let config = drone::Config::from_cli(executor_config).await;
-            drone::start(config).await?;
-            println!("Executor Service Stopped.");
-        }
-        Some(Commands::Migrate(migrate_config)) => {
-            let pool = pg::create_pool(migrate_config.postgres_url, 2).await?;
-            pg::migrate_pg(&pool).await?;
-        }
+        Ok(())
     }
 
-    Ok(())
+    fn layer<S>(&self) -> impl Layer<S>
+    where
+        S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+    {
+        let is_dev = self.command.is_none() || matches!(self.command, Some(Commands::Dev(_)));
+        if is_dev {
+            None
+        } else {
+            Some(tracing_subscriber::fmt::layer().with_filter(EnvFilter::new("info")))
+        }
+    }
 }
 
 fn main() -> anyhow::Result<()> {
     let _ = dotenvy::dotenv_override();
+    let cli = Cli::parse();
 
     if let Ok(sentry_key) = std::env::var("ROCKTICK_SENTRY_KEY") {
         let _guard = sentry::init((
@@ -498,7 +512,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let console_layer = console_subscriber::spawn();
-    let stdout_layer = tracing_subscriber::fmt::layer().with_filter(EnvFilter::new("info"));
+    let stdout_layer = cli.layer();
 
     tracing_subscriber::registry()
         .with(console_layer)
@@ -510,15 +524,13 @@ fn main() -> anyhow::Result<()> {
         .enable_all()
         .build()?
         .block_on(async {
-            let result = run().await;
+            let result = cli.run().await;
 
             if let Err(err) = result {
                 tracing::error! {
                   %err,
                   "Rocktick stopped on error."
                 };
-            } else {
-                println!("Program stopped.");
             }
 
             Ok(())

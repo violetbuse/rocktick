@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::{SqlitePool, migrate::Migrator, sqlite::SqlitePoolOptions};
 use std::{path::PathBuf, time::Duration};
 use tokio::fs;
 
@@ -15,9 +15,11 @@ pub struct DroneStore {
     pool: Pool<Sqlite>,
 }
 
+pub static MIGRATOR: Migrator = migrate!("migrations/sqlite");
+
 impl DroneStore {
     async fn run_migrations(&self) -> anyhow::Result<()> {
-        migrate!("migrations/sqlite")
+        MIGRATOR
             .run(&self.pool)
             .await
             .map_err(|err| anyhow!("Error running drone store migrations: {:?}", err))?;
@@ -25,25 +27,12 @@ impl DroneStore {
         Ok(())
     }
 
-    pub async fn in_memory(name: &str) -> anyhow::Result<Self> {
-        let connection_options = SqliteConnectOptions::new()
-            .create_if_missing(true)
-            .foreign_keys(true)
-            .filename(format!("file:in_memory_{}", name))
-            .in_memory(true)
-            .shared_cache(true);
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        if !cfg!(test) {
+            panic!("DroneStore::from_pool should not be called in production");
+        }
 
-        let conn = SqlitePoolOptions::new()
-            .min_connections(3)
-            .max_connections(10)
-            .idle_timeout(None)
-            .max_lifetime(None)
-            .connect_with(connection_options)
-            .await?;
-
-        let store = Self { pool: conn };
-        store.run_migrations().await?;
-        Ok(store)
+        Self { pool }
     }
 
     pub fn default_store_location() -> anyhow::Result<PathBuf> {

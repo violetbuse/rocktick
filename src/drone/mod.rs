@@ -7,7 +7,6 @@ mod workflows;
 
 use std::{net::IpAddr, path::PathBuf, sync::Arc, time::Duration};
 
-use anyhow::anyhow;
 use tokio::{
     select,
     sync::{Mutex, RwLock, mpsc},
@@ -23,7 +22,6 @@ pub struct Config {
     ip: IpAddr,
     port: usize,
     store_location: PathBuf,
-    store_in_memory: bool,
 }
 
 impl Config {
@@ -35,7 +33,6 @@ impl Config {
             ip: options.ip,
             port: options.port,
             store_location: options.store_path,
-            store_in_memory: options.store_in_memory,
         }
     }
 }
@@ -66,15 +63,7 @@ pub async fn start(config: Config) -> anyhow::Result<()> {
 
     let (error_tx, mut error_rx) = mpsc::channel(1);
 
-    let store: DroneStore = if config.store_in_memory {
-        DroneStore::in_memory(config.store_location.to_str().ok_or(anyhow!(
-            "unable to turn store location to string {:?}",
-            config.store_location
-        ))?)
-        .await?
-    } else {
-        DroneStore::from_filename(config.store_location).await?
-    };
+    let store = DroneStore::from_filename(config.store_location).await?;
 
     let state = DroneState {
         id: config.id,
