@@ -1,6 +1,6 @@
 use indoc::indoc;
 use postgresql_embedded::{PostgreSQL, Settings, VersionReq};
-use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
+use sqlx::{Pool, Postgres, migrate::Migrator, postgres::PgPoolOptions};
 
 include!(concat!(env!("OUT_DIR"), "/embedded_postgres_version.rs"));
 
@@ -21,8 +21,10 @@ pub async fn create_pool(postgres_url: String, count: u32) -> anyhow::Result<Poo
     Ok(pool)
 }
 
+pub static MIGRATOR: Migrator = sqlx::migrate!("./migrations/postgres");
+
 pub async fn migrate_pg(pool: &Pool<Postgres>) -> anyhow::Result<()> {
-    sqlx::migrate!("./migrations/postgres").run(pool).await?;
+    MIGRATOR.run(pool).await?;
 
     Ok(())
 }
